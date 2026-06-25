@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { entityDetails, marginDiagnosis, costItemCompare, subtypeToBiz } from '../lib/variance';
+import {
+  entityDetails, marginDiagnosis, costItemCompare, costItemContributors, subtypeToBiz,
+} from '../lib/variance';
 import { useLang } from '../context/LangContext';
 
 const NOTE_PREFIX = 'vn_dashboard_report_notes_v1:';
@@ -10,6 +12,10 @@ const signed = (value, digits = 1) => (
     : `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`
 );
 const money = (value) => Math.round(value || 0).toLocaleString('ko-KR');
+const contributionText = (rows, L) => rows.map((row) => {
+  const share = row.share != null ? `, ${L('증가 대상 내', 'share among increases')} ${row.share.toFixed(0)}%` : '';
+  return `${row.name} +${money(row.delta)}${L('백만동', ' M dong')}${share}`;
+}).join(' · ');
 
 function loadNotes(key) {
   try {
@@ -73,19 +79,40 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const topCosts = increases.slice(0, 3);
   const worstWarehouse = warehouses.find((item) => item.gpDelta < -1);
   const worstCustomer = customers.find((item) => item.gpDelta < -1);
-  const checks = [
-    ...topCosts.map((item) => ({
+  const costChecks = topCosts.map((item) => {
+    const warehouseDrivers = costItemContributors('warehouses', item.item, region, clff, biz, cmp);
+    const customerDrivers = costItemContributors('customers', item.item, region, clff, biz, cmp);
+    const warehouseNames = warehouseDrivers.map((row) => row.name).join(', ');
+    const customerNames = customerDrivers.map((row) => row.name).join(', ');
+    const target = [
+      warehouseNames && L(`창고 ${warehouseNames}`, `warehouses ${warehouseNames}`),
+      customerNames && L(`고객사 ${customerNames}`, `customers ${customerNames}`),
+    ].filter(Boolean).join(' / ');
+    return {
       id: `cost:${item.item}`,
       title: L(`${cleanItem(item.item)} 증가 사유`, `${cleanItem(item.item)} increase`),
       evidence: L(
         `${money(item.prev)} → ${money(item.cur)}백만동, ${money(item.delta)}백만동 증가 (${signed(item.pct)}). ${item.structural ? '여러 달 반복되어 구조적 가능성이 있습니다.' : '특정 기간 집중 여부를 확인해야 합니다.'}`,
         `${money(item.prev)} → ${money(item.cur)} M dong, up ${money(item.delta)} (${signed(item.pct)}). ${item.structural ? 'Repeated across months; potentially structural.' : 'Check whether the increase is period-specific.'}`,
       ),
+      warehouseDetail: warehouseDrivers.length
+        ? contributionText(warehouseDrivers, L)
+        : L('증가 창고 특정 불가', 'No warehouse driver identified'),
+      customerDetail: customerDrivers.length
+        ? contributionText(customerDrivers, L)
+        : L('고객사 배부 데이터에서 증가 대상 특정 불가', 'No customer driver identified in allocated data'),
       question: L(
-        '물량 증가, 단가 변경, 일회성 비용, 회계 조정 중 실제 원인은 무엇인가요?',
-        'Was this driven by volume, rate changes, one-off cost, or accounting adjustment?',
+        target
+          ? `${target} 담당자에게 물량·작업시간·적용 단가가 얼마나 변했는지, 신규 작업·일회성 비용·회계 재분류가 있었는지 확인해 주세요. 증가 원인을 수량 효과와 단가 효과로 나눌 수 있나요?`
+          : '물량·작업시간·적용 단가 변화와 신규 작업·일회성 비용·회계 재분류 여부를 확인해 주세요. 증가 원인을 수량 효과와 단가 효과로 나눌 수 있나요?',
+        target
+          ? `Ask the owners of ${target} about volume, work hours, rates, new work, one-off costs, and reclassification. Can the increase be split into quantity and rate effects?`
+          : 'Check volume, work hours, rates, new work, one-off costs, and reclassification. Can the increase be split into quantity and rate effects?',
       ),
-    })),
+    };
+  });
+  const checks = [
+    ...costChecks,
     ...(worstWarehouse ? [{
       id: `warehouse:${worstWarehouse.name}`,
       title: L(`${worstWarehouse.name} 이익 악화`, `${worstWarehouse.name} profit decline`),
@@ -177,6 +204,19 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                       <b className="text-[12px] text-slate-700">{item.title}</b>
                     </div>
                     <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{item.evidence}</p>
+                    {item.warehouseDetail && (
+                      <div className="mt-1 rounded bg-blue-50/80 px-2 py-1 text-[11px] leading-relaxed text-blue-900">
+                        <b>{L('어디 창고', 'Warehouses')}:</b> {item.warehouseDetail}
+                      </div>
+                    )}
+                    {item.customerDetail && (
+                      <div className="mt-1 rounded bg-violet-50/80 px-2 py-1 text-[11px] leading-relaxed text-violet-900">
+                        <b>{L('어느 고객사', 'Customers')}:</b> {item.customerDetail}
+                        <span className="block text-[10px] text-violet-500">
+                          {L('※ 고객사 원가는 운영 배부 기준 참고치이며 창고 합계와 다를 수 있습니다.', '※ Customer costs are allocated operational figures and may differ from warehouse totals.')}
+                        </span>
+                      </div>
+                    )}
                     <p className="mt-0.5 text-[11px] font-medium text-amber-800">→ {item.question}</p>
                     <textarea
                       value={notes[item.id] || ''}
