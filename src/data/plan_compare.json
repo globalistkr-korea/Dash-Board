@@ -1,0 +1,167 @@
+{
+ "unit": "백만원",
+ "monthLabel": "5월",
+ "currentMonth": 5,
+ "metrics": {
+  "매출": {
+   "total": {
+    "thisMonth": {
+     "py": 12424.0,
+     "plan": 15218.0,
+     "prevMonth": 15260.0,
+     "act": 15172.0
+    },
+    "ytd": {
+     "py": 65892.0,
+     "plan": 73439.0,
+     "act": 71165.0
+    }
+   },
+   "lines": [
+    {
+     "name": "베트남CL",
+     "thisMonth": {
+      "py": 9070.0,
+      "plan": 10791.0,
+      "prevMonth": 12138.0,
+      "act": 11204.0
+     },
+     "ytd": {
+      "py": 47639.0,
+      "plan": 53872.0,
+      "act": 55387.0
+     }
+    },
+    {
+     "name": "베트남W&D만",
+     "thisMonth": {
+      "py": 7671.0,
+      "plan": 9668.0,
+      "prevMonth": 11242.0,
+      "act": 10300.0
+     },
+     "ytd": {
+      "py": 41143.0,
+      "plan": 47282.0,
+      "act": 50845.0
+     }
+    },
+    {
+     "name": "CJ GMD",
+     "thisMonth": {
+      "py": 12084.0,
+      "plan": 8498.0,
+      "prevMonth": 9169.0,
+      "act": 8655.0
+     },
+     "ytd": {
+      "py": 63964.0,
+      "plan": 41516.0,
+      "act": 41761.0
+     }
+    },
+    {
+     "name": "베트남법인",
+     "thisMonth": {
+      "py": 5476.0,
+      "plan": 6720.0,
+      "prevMonth": 6091.0,
+      "act": 6517.0
+     },
+     "ytd": {
+      "py": 28688.0,
+      "plan": 31923.0,
+      "act": 29403.0
+     }
+    }
+   ],
+   "margin": null
+  },
+  "영업이익": {
+   "total": {
+    "thisMonth": {
+     "py": 393.0,
+     "plan": 560.0,
+     "prevMonth": 405.0,
+     "act": 643.0
+    },
+    "ytd": {
+     "py": 2007.0,
+     "plan": 2178.0,
+     "act": 2138.0
+    }
+   },
+   "lines": [
+    {
+     "name": "베트남CL",
+     "thisMonth": {
+      "py": 452.0,
+      "plan": 524.0,
+      "prevMonth": 528.0,
+      "act": 634.0
+     },
+     "ytd": {
+      "py": 2222.0,
+      "plan": 2423.0,
+      "act": 2687.0
+     }
+    },
+    {
+     "name": "베트남W&D만",
+     "thisMonth": {
+      "py": 363.0,
+      "plan": 494.0,
+      "prevMonth": 491.0,
+      "act": 588.0
+     },
+     "ytd": {
+      "py": 1972.0,
+      "plan": 2318.0,
+      "act": 2472.0
+     }
+    },
+    {
+     "name": "CJ GMD",
+     "thisMonth": {
+      "py": 275.0,
+      "plan": 451.0,
+      "prevMonth": 331.0,
+      "act": 378.0
+     },
+     "ytd": {
+      "py": 1988.0,
+      "plan": 1789.0,
+      "act": 1992.0
+     }
+    },
+    {
+     "name": "베트남법인",
+     "thisMonth": {
+      "py": 109.0,
+      "plan": 109.0,
+      "prevMonth": 75.0,
+      "act": 265.0
+     },
+     "ytd": {
+      "py": 72.0,
+      "plan": 388.0,
+      "act": 146.0
+     }
+    }
+   ],
+   "margin": {
+    "thisMonth": {
+     "py": 0.032,
+     "plan": 0.037,
+     "prevMonth": 0.027,
+     "act": 0.042
+    },
+    "ytd": {
+     "py": 0.03,
+     "plan": 0.03,
+     "act": 0.03
+    }
+   }
+  }
+ }
+}
