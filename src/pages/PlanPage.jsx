@@ -11,6 +11,7 @@ import { CMP, CMP_METRICS, CMP_MONTH, ratio, attain } from '../lib/compare';
 import { opsList as opsL, view as opsView, annualOf as opsAnnual, OPS_CURRENT } from '../lib/ops';
 import { marginDiagnosis, CUR_MONTH_NO, PREV_MONTH_NO, cmpYTD, cmpMoM, cmpYoYMonth, subtypeToBiz, entityDetails, costItemCompare } from '../lib/variance';
 import { useLang } from '../context/LangContext';
+import ReportBriefing from '../components/ReportBriefing';
 
 const TABS = ['요약', ...PL_METRICS];
 const RATIO_LABEL = { 매출원가: '원가율', 매출이익: '매출이익률', 판관비: '판관비율', 영업이익: '영업이익률' };
@@ -480,6 +481,8 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
         {tag} · {L('매출', 'Rev')} {pp(d.revYoY)} · {L('이익', 'GP')} {pp(d.gpYoY)} · {L('이익률', 'mgn')} {d.m0?.toFixed(1)}→{d.m1?.toFixed(1)}%({pp(d.marginPp)}p){compress ? ' ⚠' : ''}
       </div>
 
+      <ReportBriefing tag={tag} cmp={cmp} clff={clff} region={region} subtype={subtype} />
+
       {/* 창고별 상세 */}
       <div className="space-y-1">
         <div className="text-[11px] font-semibold text-slate-500">{L('▌창고별 점검', '▌By warehouse')}</div>
@@ -504,16 +507,24 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
               <th className="text-right font-normal">{L('당기', 'Now')}</th>
               <th className="text-right font-normal">Δ</th>
               <th className="text-right font-normal">%</th>
+              <th className="text-right font-normal">{L('판정', 'Pattern')}</th>
             </tr>
           </thead>
           <tbody>
-            {items.slice(0, 8).map((it) => (
+            {items.map((it) => (
               <tr key={it.item} className="border-t border-slate-50">
                 <td className="text-left text-slate-600 py-0.5 whitespace-nowrap">{it.item}{it.structural && it.delta > 0 ? ' 🔧' : ''}</td>
                 <td className="text-right tabular-nums text-slate-400">{mnD(it.prev)}</td>
                 <td className="text-right tabular-nums text-slate-700">{mnD(it.cur)}</td>
                 <td className={`text-right tabular-nums font-medium ${it.delta > 0 ? 'text-red-500' : 'text-blue-600'}`}>{it.delta >= 0 ? '+' : ''}{mnD(it.delta)}</td>
                 <td className={`text-right tabular-nums ${it.delta > 0 ? 'text-red-400' : 'text-blue-400'}`}>{pp(it.pct)}</td>
+                <td className={`text-right whitespace-nowrap ${it.delta <= 0 ? 'text-blue-500' : it.structural ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
+                  {it.delta <= 0
+                    ? L('감소', 'Down')
+                    : it.structural
+                      ? L('반복↑', 'Repeated↑')
+                      : L('확인 필요', 'Check')}
+                </td>
               </tr>
             ))}
           </tbody>
