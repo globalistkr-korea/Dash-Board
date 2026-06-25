@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  OPS_YEARS, OPS_CURRENT, EOKDONG, opsActualCount,
+  OPS_YEARS, OPS_CURRENT, opsActualCount,
   opsList, opsGet, view, annualOf, ytdOf, yoyOf, anomaliesOf, allAnomalies, itemRanking,
 } from '../lib/ops';
 import { useLang } from '../context/LangContext';
@@ -42,7 +42,7 @@ function Card({ title, hint, children }) {
   );
 }
 
-export default function OpsExplorer({ kind, title, groupNoun }) {
+export default function OpsExplorer({ kind, groupNoun }) {
   const { t } = useLang();
   const [region, setRegion] = useState('북부');   // 북부 담당자 기본
   const [clff, setClff] = useState('전체');

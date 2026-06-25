@@ -1,15 +1,15 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect } from 'react';
 import { EN, CONTRACT_KO } from '../lib/labels';
 
 const LangContext = createContext(null);
 const KEY = 'vn_dashboard_lang';
+const initLang = () => {
+  try { const s = localStorage.getItem(KEY); return s === 'en' ? 'en' : 'ko'; } catch { return 'ko'; }
+};
 
 export function LangProvider({ children }) {
-  const [lang, setLang] = useState('ko'); // 'ko' | 'en'
-  useEffect(() => {
-    const s = localStorage.getItem(KEY);
-    if (s === 'ko' || s === 'en') setLang(s);
-  }, []);
+  const [lang, setLang] = useState(initLang); // 'ko' | 'en'
   useEffect(() => { localStorage.setItem(KEY, lang); }, [lang]);
   const toggleLang = () => setLang((l) => (l === 'ko' ? 'en' : 'ko'));
 

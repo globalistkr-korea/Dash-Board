@@ -1,20 +1,17 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect } from 'react';
 import { KRW_RATE_DEFAULT } from '../lib/format';
 
 const UnitContext = createContext(null);
 const KEY = 'vn_dashboard_ui';
+const initUI = () => {
+  try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; }
+};
 
 export function UnitProvider({ children }) {
-  const [unit, setUnit] = useState('vnd'); // 'vnd'(백만동) | 'krw'(백만원)
-  const [rate, setRate] = useState(KRW_RATE_DEFAULT);
-
-  useEffect(() => {
-    try {
-      const s = JSON.parse(localStorage.getItem(KEY) || '{}');
-      if (s.unit) setUnit(s.unit);
-      if (s.rate) setRate(s.rate);
-    } catch { /* ignore */ }
-  }, []);
+  const saved = initUI();
+  const [unit, setUnit] = useState(saved.unit === 'krw' ? 'krw' : 'vnd'); // 'vnd'(백만동) | 'krw'(백만원)
+  const [rate, setRate] = useState(saved.rate || KRW_RATE_DEFAULT);
 
   useEffect(() => {
     localStorage.setItem(KEY, JSON.stringify({ unit, rate }));

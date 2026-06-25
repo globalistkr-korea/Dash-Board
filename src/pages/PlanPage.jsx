@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
 } from 'recharts';
 import {
   YEARS, PL_METRICS, CURRENT_YEAR, monthsMeta, actualCount,
@@ -122,17 +122,9 @@ export default function PlanPage() {
   );
 }
 
-/* 구성 Top 고객/창고 — 경영계획 숫자를 "누가 구성하나" (운영 데이터/동 기준) */
-function ConstituentCard({ clff, region }) {
-  const { t, lang } = useLang();
-  const top = (kind) => opsL(kind, region, clff)
-    .map((e) => ({ name: e.name, region: e.region, rev: opsAnnual(opsView(e, clff, '전체'), 'revenue', OPS_CURRENT) }))
-    .filter((x) => x.rev > 0)
-    .sort((a, b) => b.rev - a.rev)
-    .slice(0, 5);
-  const cust = top('customers'), wh = top('warehouses');
-  if (!cust.length && !wh.length) return null;
-  const Col = ({ title, list }) => (
+/* 구성 Top 컬럼 (모듈 레벨 — 렌더 중 생성 금지) */
+function ConstituentCol({ title, list }) {
+  return (
     <div className="flex-1 min-w-[160px]">
       <div className="text-[11px] font-semibold text-slate-500 mb-1">{title}</div>
       {list.map((x, i) => (
@@ -143,6 +135,18 @@ function ConstituentCard({ clff, region }) {
       ))}
     </div>
   );
+}
+
+/* 구성 Top 고객/창고 — 경영계획 숫자를 "누가 구성하나" (운영 데이터/동 기준) */
+function ConstituentCard({ clff, region }) {
+  const { lang } = useLang();
+  const top = (kind) => opsL(kind, region, clff)
+    .map((e) => ({ name: e.name, region: e.region, rev: opsAnnual(opsView(e, clff, '전체'), 'revenue', OPS_CURRENT) }))
+    .filter((x) => x.rev > 0)
+    .sort((a, b) => b.rev - a.rev)
+    .slice(0, 5);
+  const cust = top('customers'), wh = top('warehouses');
+  if (!cust.length && !wh.length) return null;
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3">
       <div className="flex items-baseline justify-between mb-2">
@@ -150,8 +154,8 @@ function ConstituentCard({ clff, region }) {
         <span className="text-[11px] text-slate-400">{OPS_CURRENT} · {lang === 'en' ? '억dong' : '억동'}</span>
       </div>
       <div className="flex gap-4 flex-wrap">
-        <Col title={lang === 'en' ? 'Top Customers' : '고객 Top 5'} list={cust} />
-        <Col title={lang === 'en' ? 'Top Warehouses' : '창고 Top 5'} list={wh} />
+        <ConstituentCol title={lang === 'en' ? 'Top Customers' : '고객 Top 5'} list={cust} />
+        <ConstituentCol title={lang === 'en' ? 'Top Warehouses' : '창고 Top 5'} list={wh} />
       </div>
       <div className="text-[10px] text-slate-400 mt-1.5">{lang === 'en' ? '※ Operational data (VND dong) — different source/unit from P&L (KRW); for context, not exact match.' : '※ 운영 데이터(동) 기준 — 경영계획(원)과 출처·단위 달라 정확 일치 아님. 구성 파악용 참고.'}</div>
     </div>
@@ -185,18 +189,16 @@ function InsightCard({ clff, region }) {
               </div>
             ))}
           </div>
-          {/* 참고용 미니 차트: 매출(억원) 막대 + 영업이익률(%) 점 */}
-          <div className="w-full md:w-[180px] h-[80px] shrink-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mini} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
-                <XAxis dataKey="year" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <Tooltip formatter={(v, n) => n === '매출' ? [`${v.toLocaleString('ko-KR')}억`, '매출'] : v} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
-                <Bar dataKey="매출" radius={[3, 3, 0, 0]}>
-                  {mini.map((b) => <Cell key={b.key} fill={YEAR_COLOR[b.key]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          {/* 참고용 미니 차트: 매출(억원) 막대 — 고정 크기(ResponsiveContainer 0-size 경고 회피) */}
+          <div className="md:w-[180px] h-[80px] shrink-0 overflow-hidden">
+            <BarChart width={180} height={80} data={mini} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+              <XAxis dataKey="year" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip formatter={(v, n) => n === '매출' ? [`${v.toLocaleString('ko-KR')}억`, '매출'] : v} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+              <Bar dataKey="매출" radius={[3, 3, 0, 0]}>
+                {mini.map((b) => <Cell key={b.key} fill={YEAR_COLOR[b.key]} />)}
+              </Bar>
+            </BarChart>
             <div className="text-[9px] text-slate-400 text-center -mt-1">참고: 매출 추이(억원)</div>
           </div>
         </div>
@@ -206,7 +208,7 @@ function InsightCard({ clff, region }) {
 }
 
 /* 연도 비교 테이블 (행=구분, 열=연도) */
-function YearTable({ rows, metric, title, hint, onRow }) {
+function YearTable({ rows, title, hint, onRow }) {
   const { t: tt } = useLang();
   return (
     <Card title={title} hint={hint}>
