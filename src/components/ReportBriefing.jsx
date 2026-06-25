@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  entityDetails, marginDiagnosis, costItemCompare, costItemContributors, subtypeToBiz,
+  entityDetails, marginDiagnosis, costItemCompare, costItemContributors,
+  costDataQualityAlerts, subtypeToBiz,
 } from '../lib/variance';
 import { useLang } from '../context/LangContext';
 
@@ -12,10 +13,24 @@ const signed = (value, digits = 1) => (
     : `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`
 );
 const money = (value) => Math.round(value || 0).toLocaleString('ko-KR');
-const contributionText = (rows, L) => rows.map((row) => {
-  const share = row.share != null ? `, ${L('증가 대상 내', 'share among increases')} ${row.share.toFixed(0)}%` : '';
-  return `${row.name} +${money(row.delta)}${L('백만동', ' M dong')}${share}`;
+const contributionText = (rows, L, direction = 'increase') => rows.map((row) => {
+  const shareLabel = direction === 'increase' ? L('증가 대상 내', 'share among increases') : L('감소 대상 내', 'share among decreases');
+  const share = row.share != null ? `, ${shareLabel} ${row.share.toFixed(0)}%` : '';
+  return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)})${share}`;
 }).join(' · ');
+
+function dropType(item, L) {
+  if (item.cur === 0 && item.prev >= 100) return L('0원 전환·누락 의심', 'Zero value / possible omission');
+  const ratio = item.prev ? item.cur / item.prev : null;
+  if (ratio != null && ratio >= 0.07 && ratio <= 0.13) return L('약 1/10 자릿수 의심', 'Possible 10× digit error');
+  return L('급감·입력값 확인', 'Sharp drop / verify input');
+}
+
+function alertType(alert, L) {
+  if (alert.type === 'zero') return L('0원 전환·누락 의심', 'Zero value / possible omission');
+  if (alert.type === 'digit') return L('약 1/10 자릿수 의심', 'Possible 10× digit error');
+  return L('70% 이상 급감', 'Drop of 70% or more');
+}
 
 function loadNotes(key) {
   try {
@@ -64,6 +79,14 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     () => entityDetails('customers', region, clff, biz, cmp),
     [region, clff, biz, cmp],
   );
+  const warehouseAlerts = useMemo(
+    () => costDataQualityAlerts('warehouses', region, clff, biz, cmp, 4),
+    [region, clff, biz, cmp],
+  );
+  const customerAlerts = useMemo(
+    () => costDataQualityAlerts('customers', region, clff, biz, cmp, 3),
+    [region, clff, biz, cmp],
+  );
   const noteKey = [
     cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype,
   ].join(':');
@@ -75,6 +98,10 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   }, [noteKey, notes]);
 
   const increases = costs.filter((item) => item.delta > 0);
+  const decreases = costs
+    .filter((item) => item.delta < 0 && item.prev >= 100 && (item.cur === 0 || item.cur <= item.prev * 0.3))
+    .sort((a, b) => a.delta - b.delta)
+    .slice(0, 3);
   const totalIncrease = increases.reduce((sum, item) => sum + item.delta, 0);
   const topCosts = increases.slice(0, 3);
   const worstWarehouse = warehouses.find((item) => item.gpDelta < -1);
@@ -111,7 +138,54 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       ),
     };
   });
+  const dropChecks = decreases.map((item) => {
+    const warehouseDrivers = costItemContributors('warehouses', item.item, region, clff, biz, cmp, 3, 'decrease');
+    const customerDrivers = costItemContributors('customers', item.item, region, clff, biz, cmp, 3, 'decrease');
+    const warehouseNames = warehouseDrivers.map((row) => row.name).join(', ');
+    const customerNames = customerDrivers.map((row) => row.name).join(', ');
+    const targets = [
+      warehouseNames && L(`창고 ${warehouseNames}`, `warehouses ${warehouseNames}`),
+      customerNames && L(`고객사 ${customerNames}`, `customers ${customerNames}`),
+    ].filter(Boolean).join(' / ');
+    return {
+      id: `drop:${item.item}`,
+      urgent: true,
+      title: `${cleanItem(item.item)} · ${dropType(item, L)}`,
+      evidence: L(
+        `${money(item.prev)} → ${money(item.cur)}백만동, ${money(Math.abs(item.delta))}백만동 감소 (${signed(item.pct)}). 실제 절감일 수도 있지만 미기입·자릿수·계정 변경 가능성을 먼저 확인해야 합니다.`,
+        `${money(item.prev)} → ${money(item.cur)} M dong, down ${money(Math.abs(item.delta))} (${signed(item.pct)}). This may be a real saving, but first verify omission, digit error, or account change.`,
+      ),
+      warehouseDetail: warehouseDrivers.length
+        ? contributionText(warehouseDrivers, L, 'decrease')
+        : L('감소 창고 특정 불가', 'No warehouse drop identified'),
+      customerDetail: customerDrivers.length
+        ? contributionText(customerDrivers, L, 'decrease')
+        : L('고객사 배부 데이터에서 감소 대상 특정 불가', 'No customer drop identified in allocated data'),
+      question: L(
+        `${targets || '해당 원가 담당자'}에게 ① 원본 전표·시트가 실제 ${money(item.cur)}백만동인지 ② 0 또는 소수점·자릿수 오입력인지 ③ 비용 누락·익월 이월인지 ④ 다른 계정으로 재분류됐는지 ⑤ 실제 물량·작업시간 감소인지 확인해 주세요.`,
+        `Ask ${targets || 'the cost owner'} to verify: ① source voucher/sheet value ${money(item.cur)} M dong, ② zero/decimal/digit error, ③ omitted or deferred cost, ④ account reclassification, and ⑤ actual volume/work-hour decline.`,
+      ),
+    };
+  });
+  const dataChecks = [...warehouseAlerts, ...customerAlerts].map((alert) => {
+    const targetType = alert.kind === 'warehouses' ? L('창고', 'Warehouse') : L('고객사', 'Customer');
+    return {
+      id: `data:${alert.kind}:${alert.entity}:${alert.item}`,
+      urgent: true,
+      title: `${targetType} ${alert.entity} · ${cleanItem(alert.item)} · ${alertType(alert, L)}`,
+      evidence: L(
+        `${money(alert.prev)} → ${money(alert.cur)}백만동 (${signed(alert.pct)}). 전체 합계에서 다른 대상의 증가와 상쇄되더라도 개별 입력값은 별도 점검이 필요합니다.`,
+        `${money(alert.prev)} → ${money(alert.cur)} M dong (${signed(alert.pct)}). This individual value needs review even if offset by increases elsewhere.`,
+      ),
+      question: L(
+        `${alert.entity} 담당자에게 원본 시트·전표의 ${cleanItem(alert.item)} 값이 실제 ${money(alert.cur)}백만동인지 확인해 주세요. 0/누락, 소수점·자릿수 오류, 익월 이월, 계정 변경, 실제 운영량 감소 중 어느 경우인가요?`,
+        `Ask the ${alert.entity} owner to verify whether ${cleanItem(alert.item)} is truly ${money(alert.cur)} M dong. Is it zero/omitted, decimal or digit error, deferred, reclassified, or an actual operational decline?`,
+      ),
+    };
+  });
   const checks = [
+    ...dataChecks,
+    ...dropChecks,
     ...costChecks,
     ...(worstWarehouse ? [{
       id: `warehouse:${worstWarehouse.name}`,
@@ -137,7 +211,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
         'Any volume decline, price change, contract end, or one-off issue?',
       ),
     }] : []),
-  ].slice(0, 5);
+  ].slice(0, 10);
   const confirmedChecks = checks.filter((item) => notes[item.id]?.trim());
 
   return (
@@ -180,6 +254,20 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   {item.structural ? ` · ${L('반복 상승', 'repeated rise')} 🔧` : ''}
                 </li>
               ))}
+              {decreases.map((item) => (
+                <li key={`drop-${item.item}`}>
+                  • <span className="text-rose-700 font-semibold">⚠ {cleanItem(item.item)} {dropType(item, L)}</span>:
+                  {' '}{money(item.prev)} → {money(item.cur)} {L('백만동', 'M dong')}
+                  <b className="text-rose-600"> ({money(item.delta)}, {signed(item.pct)})</b>
+                </li>
+              ))}
+              {[...warehouseAlerts, ...customerAlerts].slice(0, 5).map((alert) => (
+                <li key={`data-${alert.kind}-${alert.entity}-${alert.item}`}>
+                  • <span className="text-rose-700 font-semibold">🚨 {alert.kind === 'warehouses' ? L('창고', 'Warehouse') : L('고객사', 'Customer')} {alert.entity}</span>
+                  {' · '}{cleanItem(alert.item)}: {money(alert.prev)} → {money(alert.cur)} {L('백만동', 'M dong')}
+                  {' · '}<b className="text-rose-600">{alertType(alert, L)}</b>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -196,10 +284,10 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
               {checks.map((item) => {
                 const confirmed = Boolean(notes[item.id]?.trim());
                 return (
-                  <div key={item.id} className="rounded-md border border-slate-200 bg-white p-2">
+                  <div key={item.id} className={`rounded-md border bg-white p-2 ${item.urgent ? 'border-rose-200 ring-1 ring-rose-100' : 'border-slate-200'}`}>
                     <div className="flex items-center gap-1.5">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {confirmed ? L('확인 완료', 'Confirmed') : L('확인 필요', 'Check')}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${confirmed ? 'bg-emerald-100 text-emerald-700' : item.urgent ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {confirmed ? L('확인 완료', 'Confirmed') : item.urgent ? L('입력 점검', 'Input check') : L('확인 필요', 'Check')}
                       </span>
                       <b className="text-[12px] text-slate-700">{item.title}</b>
                     </div>
