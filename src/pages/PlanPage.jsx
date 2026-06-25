@@ -9,7 +9,7 @@ import {
 import { fmtKrwMetric, planUnitLabel, fmtPct, deltaColor } from '../lib/format';
 import { CMP, CMP_METRICS, CMP_MONTH, ratio, attain } from '../lib/compare';
 import { opsList as opsL, view as opsView, annualOf as opsAnnual, OPS_CURRENT } from '../lib/ops';
-import { marginDiagnosis, CUR_MONTH_NO, PREV_MONTH_NO, cmpYTD, cmpMoM, cmpYoYMonth, subtypeToBiz, entityDetails, costItemCompare } from '../lib/variance';
+import { marginDiagnosis, cmpYTD, cmpMoM, cmpYoYMonth, subtypeToBiz, entityDetails, costItemCompare } from '../lib/variance';
 import { useLang } from '../context/LangContext';
 import ReportBriefing from '../components/ReportBriefing';
 
@@ -338,17 +338,21 @@ function MonthlyView({ clff, region, subtype }) {
 
   return (
     <>
-      {/* 목표 대비(계획比) — 현재 위치 판가름 (베트남 전체 공식 기준) */}
-      <PlanCard />
-      <LineCard metric="매출" />
+      {/* 목표 대비 원본은 최신 실적월 자료만 있으므로 해당 월에서만 표시 */}
+      {m === lastActual && (
+        <>
+          <PlanCard />
+          <LineCard metric="매출" />
+        </>
+      )}
 
       {/* 월 선택 */}
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs text-slate-400 mr-1">{lang === 'en' ? 'Month' : '기준 월'}</span>
         {meta.map((mo, i) => (
-          <button key={i} onClick={() => setM(i + 1)}
+          <button key={i} onClick={() => setM(i + 1)} disabled={i + 1 > lastActual}
             className={`w-9 py-1 rounded-lg text-xs font-medium transition-colors
-              ${m === i + 1 ? 'bg-blue-700 text-white' : mo.type === '실적' ? 'bg-white text-slate-600 border border-slate-200' : 'bg-slate-50 text-slate-300 border border-slate-100'}`}>
+              ${m === i + 1 ? 'bg-blue-700 text-white' : mo.type === '실적' ? 'bg-white text-slate-600 border border-slate-200' : 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed'}`}>
             {moLabel(i)}
           </button>
         ))}
@@ -385,7 +389,7 @@ function MonthlyView({ clff, region, subtype }) {
       </Card>
 
       {/* 당월 변동 원인 분석 */}
-      <VarianceCard clff={clff} region={region} subtype={subtype} mode="month" />
+      <VarianceCard clff={clff} region={region} subtype={subtype} mode="month" month={m} />
 
       {/* 누계 비교 */}
       <Card title="누계 비교" hint={`1~${moLabel(m - 1)} · ${t('누계')}`}>
@@ -418,7 +422,7 @@ function MonthlyView({ clff, region, subtype }) {
       </Card>
 
       {/* 누계 변동 원인 분석 */}
-      <VarianceCard clff={clff} region={region} subtype={subtype} mode="ytd" />
+      {m > 1 && <VarianceCard clff={clff} region={region} subtype={subtype} mode="ytd" month={m} />}
 
       <p className="text-[11px] text-slate-400 text-center">{lang === 'en' ? 'Current month vs prev month / same month last year · YTD vs last year & annual progress' : '당월=전월·전년동월 대비, 누계=전년 대비·연간 전망 진행률 · 단위 매출 억원/이익 백만원'}</p>
     </>
@@ -481,7 +485,14 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
         {tag} · {L('매출', 'Rev')} {pp(d.revYoY)} · {L('이익', 'GP')} {pp(d.gpYoY)} · {L('이익률', 'mgn')} {d.m0?.toFixed(1)}→{d.m1?.toFixed(1)}%({pp(d.marginPp)}p){compress ? ' ⚠' : ''}
       </div>
 
-      <ReportBriefing tag={tag} cmp={cmp} clff={clff} region={region} subtype={subtype} />
+      <ReportBriefing
+        key={[cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype].join(':')}
+        tag={tag}
+        cmp={cmp}
+        clff={clff}
+        region={region}
+        subtype={subtype}
+      />
 
       {/* 창고별 상세 */}
       <div className="space-y-1">
@@ -535,10 +546,12 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
 }
 
 /* 변동 원인 상세 — 전월비/전년비 섹션으로 창고·고객·원가 사유 전개. mode: 'ytd'|'month' */
-function VarianceCard({ clff, region, subtype, mode = 'ytd' }) {
+function VarianceCard({ clff, region, subtype, mode = 'ytd', month = actualCount(CURRENT_YEAR) }) {
   const { lang } = useLang();
   const L = (ko, en) => (lang === 'en' ? en : ko);
-  const overall = marginDiagnosis(mode === 'month' ? cmpMoM() : cmpYTD(), clff, region, subtype);
+  const monthCmp = cmpMoM(month);
+  const primaryCmp = mode === 'month' ? (monthCmp || cmpYoYMonth(month)) : cmpYTD(month);
+  const overall = marginDiagnosis(primaryCmp, clff, region, subtype);
   if (overall.revYoY == null || overall.gpYoY == null) return null;
   const anyAnom = overall.anomaly || (overall.marginPp != null && overall.marginPp <= -0.5);
 
@@ -547,16 +560,38 @@ function VarianceCard({ clff, region, subtype, mode = 'ytd' }) {
   const title = `${L('변동 원인 상세', 'Variance detail')} · ${scope}`;
   const sections = mode === 'month'
     ? [
-        { tag: L(`전월비 ${PREV_MONTH_NO}→${CUR_MONTH_NO}월`, `MoM ${PREV_MONTH_NO}→${CUR_MONTH_NO}M`), color: 'text-amber-800', cmp: cmpMoM() },
-        { tag: L(`전년동월비 ${CUR_MONTH_NO}월`, `YoY ${CUR_MONTH_NO}M`), color: 'text-indigo-700', cmp: cmpYoYMonth() },
+        ...(monthCmp ? [{
+          tag: L(`전월비 ${month - 1}→${month}월`, `MoM ${month - 1}→${month}M`),
+          color: 'text-amber-800',
+          cmp: monthCmp,
+        }] : []),
+        {
+          tag: month === 1
+            ? L('1월 전년동월비 · 1월 누계 동일', 'January YoY · same as January YTD')
+            : L(`전년동월비 ${month}월`, `YoY ${month}M`),
+          color: 'text-indigo-700',
+          cmp: cmpYoYMonth(month),
+        },
       ]
-    : [{ tag: L('누계 전년비', 'YTD YoY'), color: 'text-amber-800', cmp: cmpYTD() }];
+    : [{
+        tag: L(`1~${month}월 누계 전년비`, `YTD through ${month}M YoY`),
+        color: 'text-amber-800',
+        cmp: cmpYTD(month),
+      }];
 
   return (
     <div className={`rounded-xl border p-3 space-y-2 ${anyAnom ? 'bg-amber-50/70 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
       <div className={`text-xs font-semibold ${anyAnom ? 'text-amber-800' : 'text-slate-600'}`}>{anyAnom ? '⚠️' : '🔎'} {title}</div>
-      {sections.map((s, i) => (
-        <VarianceSection key={i} tag={s.tag} color={s.color} cmp={s.cmp} clff={clff} region={region} subtype={subtype} />
+      {sections.map((s) => (
+        <VarianceSection
+          key={[s.cmp.by, s.cmp.bm.join('-'), s.cmp.cy, s.cmp.cm.join('-')].join(':')}
+          tag={s.tag}
+          color={s.color}
+          cmp={s.cmp}
+          clff={clff}
+          region={region}
+          subtype={subtype}
+        />
       ))}
       <div className="text-[10px] text-slate-400">{L('※ 매출·이익률=경영계획(원). 창고·고객·원가항목=운영데이터(백만동). ▼악화/▲개선=매출이익 증감. 🔧=구조적(여러 달 지속). 교차확인 권장.', '※ Rev/margin: KRW (P&L). WH/cust/cost: ops (M dong). ▼down/▲up = gross-profit Δ. 🔧 = structural. Cross-check advised.')}</div>
     </div>

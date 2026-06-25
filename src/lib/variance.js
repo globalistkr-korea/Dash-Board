@@ -11,14 +11,17 @@ export const CUR_MONTH_NO = N;                             // 당월(1-base)
 export const PREV_MONTH_NO = N - 1;                        // 전월(1-base)
 
 // 비교 프리셋
-export const cmpYTD = () => ({ by: PREV, bm: range(N), cy: CURRENT_YEAR, cm: range(N) });           // 누계 전년比
-export const cmpYoYMonth = () => ({ by: PREV, bm: [N - 1], cy: CURRENT_YEAR, cm: [N - 1] });          // 당월 전년동월比
-export const cmpMoM = () => ({ by: CURRENT_YEAR, bm: [N - 2], cy: CURRENT_YEAR, cm: [N - 1] });       // 당월 전월比
+export const cmpYTD = (month = N) => ({ by: PREV, bm: range(month), cy: CURRENT_YEAR, cm: range(month) }); // 선택월 누계 전년比
+export const cmpYoYMonth = (month = N) => ({ by: PREV, bm: [month - 1], cy: CURRENT_YEAR, cm: [month - 1] }); // 선택월 전년동월比
+export const cmpMoM = (month = N) => (
+  month > 1 ? { by: CURRENT_YEAR, bm: [month - 2], cy: CURRENT_YEAR, cm: [month - 1] } : null
+); // 선택월 전월比. 1월은 없음
 
 function range(n) { return Array.from({ length: n }, (_, i) => i); }
 const pickSum = (arr, months) => months.reduce((s, i) => s + (arr?.[i] || 0), 0);
 const pSpan = (year, metric, clff, region, subtype, months) => pickSum(planSeries(year, metric, clff, region, subtype), months);
 const yo = (a, b) => (a ? ((b - a) / Math.abs(a)) * 100 : null);
+const analysisCount = (cmp) => Math.max(1, ...cmp.cm.map((i) => i + 1));
 
 // 1) 진단
 export function marginDiagnosis(cmp, clff = '전체', region = '전체', subtype = '전체') {
@@ -58,9 +61,10 @@ export function costDrivers(region = '전체', clff = '전체', cmp) {
   const yr = (y) => (y === PREV ? 'y25' : 'y26');
   return Object.entries(acc).map(([item, v]) => {
     const a = pickSum(v[yr(cmp.by)], cmp.bm), b = pickSum(v[yr(cmp.cy)], cmp.cm);
+    const months = analysisCount(cmp);
     let up = 0;
-    for (let i = 0; i < N; i++) if ((v.y26[i] || 0) > (v.y25[i] || 0) * 1.1) up++;
-    return { item, prev: a, cur: b, delta: b - a, yoy: a ? ((b - a) / a) * 100 : null, upMonths: up, structural: up >= Math.ceil(N * 0.6) };
+    for (let i = 0; i < months; i++) if ((v.y26[i] || 0) > (v.y25[i] || 0) * 1.1) up++;
+    return { item, prev: a, cur: b, delta: b - a, yoy: a ? ((b - a) / a) * 100 : null, upMonths: up, structural: up >= Math.ceil(months * 0.6) };
   }).filter((r) => r.delta > 0).sort((x, y) => y.delta - x.delta);
 }
 
@@ -105,8 +109,9 @@ export function entityDetails(kind, region = '전체', clff = '전체', biz = '�
     const m0 = r0 ? (g0 / r0) * 100 : null, m1 = r1 ? (g1 / r1) * 100 : null;
     const rising = Object.keys(v.items || {}).map((it) => {
       const a = pickSum(v.items[it][cmp.by], cmp.bm), b = pickSum(v.items[it][cmp.cy], cmp.cm);
-      let up = 0; for (let i = 0; i < N; i++) if ((v.items[it][CURRENT_YEAR]?.[i] || 0) > (v.items[it][PREV]?.[i] || 0) * 1.1) up++;
-      return { item: it, prev: a, cur: b, delta: b - a, pct: a ? ((b - a) / a) * 100 : null, structural: up >= Math.ceil(N * 0.6) };
+      const months = analysisCount(cmp);
+      let up = 0; for (let i = 0; i < months; i++) if ((v.items[it][CURRENT_YEAR]?.[i] || 0) > (v.items[it][PREV]?.[i] || 0) * 1.1) up++;
+      return { item: it, prev: a, cur: b, delta: b - a, pct: a ? ((b - a) / a) * 100 : null, structural: up >= Math.ceil(months * 0.6) };
     }).sort((a, b) => b.delta - a.delta);
     out.push({
       name: e.name, region: e.region,
@@ -132,9 +137,10 @@ export function costItemCompare(region = '전체', clff = '전체', biz = '전�
   }
   return Object.entries(acc).map(([item, v]) => {
     const a = pickSum(v[cmp.by], cmp.bm), b = pickSum(v[cmp.cy], cmp.cm);
+    const months = analysisCount(cmp);
     let up = 0;
-    for (let i = 0; i < N; i++) if ((v[CURRENT_YEAR][i] || 0) > (v[PREV][i] || 0) * 1.1) up++;
-    return { item, prev: a, cur: b, delta: b - a, pct: a ? ((b - a) / a) * 100 : null, structural: up >= Math.ceil(N * 0.6) };
+    for (let i = 0; i < months; i++) if ((v[CURRENT_YEAR][i] || 0) > (v[PREV][i] || 0) * 1.1) up++;
+    return { item, prev: a, cur: b, delta: b - a, pct: a ? ((b - a) / a) * 100 : null, structural: up >= Math.ceil(months * 0.6) };
   }).filter((r) => Math.abs(r.delta) >= 1).sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
 }
 
