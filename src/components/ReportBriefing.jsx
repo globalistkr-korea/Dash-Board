@@ -420,6 +420,31 @@ function loadNotes(key) {
   }
 }
 
+function loadNotesHistory(currentKey) {
+  try {
+    return Object.keys(localStorage)
+      .filter((key) => key.startsWith(NOTE_PREFIX))
+      .map((key) => {
+        const noteKey = key.slice(NOTE_PREFIX.length);
+        const value = JSON.parse(localStorage.getItem(key) || '{}');
+        const confirmed = Object.values(value).filter((note) => String(note || '').trim()).length;
+        const [by, bm, cy, cm, region, clff, subtype] = noteKey.split(':');
+        return {
+          noteKey,
+          current: noteKey === currentKey,
+          confirmed,
+          label: `${cy || '-'}년 ${cm || '-'}월 · ${region || '-'} · ${clff || '-'} · ${subtype || '-'}`,
+          compare: `${by || '-'}년 ${bm || '-'}월 대비`,
+        };
+      })
+      .filter((item) => item.confirmed > 0)
+      .sort((a, b) => (a.current === b.current ? 0 : a.current ? -1 : 1))
+      .slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
@@ -504,16 +529,22 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const [copyMode, setCopyMode] = useState('owner');
   const [cloudStatus, setCloudStatus] = useState(() => loadCloudStatus(noteKey));
   const [activeNoteKey, setActiveNoteKey] = useState(noteKey);
+  const [cloudUser, setCloudUser] = useState(null);
+  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
     if (activeNoteKey !== noteKey) return undefined;
     localStorage.setItem(NOTE_PREFIX + noteKey, JSON.stringify(notes));
+    if (!cloudUser?.uid) {
+      const statusTimer = window.setTimeout(() => setCloudStatus('local'), 0);
+      return () => window.clearTimeout(statusTimer);
+    }
     const saveTimer = window.setTimeout(async () => {
       const ok = await saveReportNotesToCloud(noteKey, notes);
       setCloudStatus(ok ? 'synced' : 'local');
     }, 700);
     return () => window.clearTimeout(saveTimer);
-  }, [activeNoteKey, noteKey, notes]);
+  }, [activeNoteKey, cloudUser?.uid, noteKey, notes]);
 
   useEffect(() => {
     let alive = true;
@@ -523,6 +554,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       setNotes(localNotes);
       setActiveNoteKey(noteKey);
       setCloudStatus(loadCloudStatus(noteKey));
+      if (!cloudUser?.uid) return;
       const cloudNotes = await loadReportNotesFromCloud(noteKey);
       if (!alive || !cloudNotes) return;
       setNotes((current) => ({ ...current, ...cloudNotes }));
@@ -532,7 +564,30 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       alive = false;
       window.clearTimeout(loadTimer);
     };
-  }, [noteKey]);
+  }, [cloudUser?.uid, noteKey]);
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    let alive = true;
+    Promise.all([
+      import('../lib/firebase'),
+      import('firebase/auth'),
+    ]).then(([{ auth }, { getRedirectResult, onAuthStateChanged }]) => {
+      if (!alive) return;
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        setCloudUser(user ? { uid: user.uid, email: user.email, displayName: user.displayName } : null);
+      });
+      getRedirectResult(auth).catch((error) => {
+        setAuthError(error?.message || 'Google login failed.');
+      });
+    }).catch((error) => {
+      setAuthError(error?.message || 'Firebase Auth load failed.');
+    });
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -730,6 +785,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       return b.priority.score - a.priority.score;
     })
     .slice(0, 5);
+  const notesHistory = loadNotesHistory(noteKey);
   const cloudStatusInfo = {
     synced: {
       label: L('클라우드 저장됨', 'Cloud saved'),
@@ -860,6 +916,31 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     const ok = await copyText(text);
     setCopiedId(ok ? 'priority' : 'fail:priority');
     window.setTimeout(() => setCopiedId(null), 1800);
+  };
+  const signInForCloud = async () => {
+    setAuthError('');
+    try {
+      const [{ auth, googleProvider }, { signInWithRedirect }] = await Promise.all([
+        import('../lib/firebase'),
+        import('firebase/auth'),
+      ]);
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error) {
+      setAuthError(error?.message || 'Google login failed.');
+    }
+  };
+  const signOutCloud = async () => {
+    setAuthError('');
+    try {
+      const [{ auth }, { signOut }] = await Promise.all([
+        import('../lib/firebase'),
+        import('firebase/auth'),
+      ]);
+      await signOut(auth);
+      setCloudStatus('local');
+    } catch (error) {
+      setAuthError(error?.message || 'Google logout failed.');
+    }
   };
 
   return (
@@ -1071,10 +1152,37 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                 <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cloudStatusInfo.className}`}>
                   {cloudStatusInfo.label}
                 </span>
+                {cloudUser?.email ? (
+                  <>
+                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      {cloudUser.email}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={signOutCloud}
+                      className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500 hover:border-slate-300"
+                    >
+                      {L('로그아웃', 'Logout')}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={signInForCloud}
+                    className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:border-blue-400"
+                  >
+                    {L('Google 로그인 후 클라우드 저장', 'Sign in for cloud save')}
+                  </button>
+                )}
                 <p className="text-[10px] text-slate-400">
                   {L('확인 사유는 현재 조건별로 자동 저장되어 같은 월·지역·구분으로 다시 열면 다시 확인할 수 있습니다.', 'Confirmed reasons are saved by the current period/region/category and can be reviewed again when reopened with the same conditions.')}
                 </p>
               </div>
+              {authError && (
+                <p className="mt-1 rounded bg-rose-50 px-2 py-1 text-[10px] text-rose-600">
+                  {L('로그인/클라우드 저장 설정 확인 필요: ', 'Login/cloud setup check needed: ')}{authError}
+                </p>
+              )}
             </div>
             <div className="mb-2 flex flex-wrap items-center gap-1">
               {checkFilterOptions.map((filter) => (
@@ -1173,6 +1281,29 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {notesHistory.length > 0 && (
+            <div className="rounded-md border border-slate-200 bg-white/70 p-2.5">
+              <div className="mb-1 text-[11px] font-semibold text-slate-600">
+                {L('6. 저장된 확인 사유 히스토리', '6. Saved confirmation history')}
+              </div>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {notesHistory.map((item) => (
+                  <div key={item.noteKey} className={`rounded-md border px-2 py-1.5 ${item.current ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.current ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {item.current ? L('현재 조건', 'Current') : L('저장됨', 'Saved')}
+                      </span>
+                      <b className="min-w-0 flex-1 truncate text-[11px] text-slate-700">{item.label}</b>
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-slate-400">
+                      {item.compare} · {item.confirmed}{L('개 사유 저장', ' saved notes')}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

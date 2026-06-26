@@ -5,7 +5,7 @@ function safeId(value) {
   return encodeURIComponent(value).replace(/\./g, '%2E');
 }
 
-function deviceId() {
+export function deviceId() {
   try {
     const existing = localStorage.getItem(DEVICE_KEY);
     if (existing) return existing;
@@ -17,12 +17,19 @@ function deviceId() {
   }
 }
 
+async function currentCloudUser() {
+  const { auth } = await import('./firebase');
+  return auth.currentUser;
+}
+
 async function cloudDocRef(noteKey) {
   const [{ doc }, { db }] = await Promise.all([
     import('firebase/firestore'),
     import('./firebase'),
   ]);
-  return doc(db, 'reportBriefingNotes', safeId(noteKey));
+  const user = await currentCloudUser();
+  if (!user?.uid) throw new Error('Cloud notes require Google sign-in.');
+  return doc(db, 'reportBriefingNotes', user.uid, 'items', safeId(noteKey));
 }
 
 export function loadCloudStatus(noteKey) {
@@ -71,6 +78,7 @@ export async function saveReportNotesToCloud(noteKey, notes) {
       notes,
       noteKey,
       lastDeviceId: deviceId(),
+      ownerUid: (await currentCloudUser())?.uid || null,
       updatedAt: serverTimestamp(),
       updatedAtLocal: new Date().toISOString(),
     }, { merge: true });
