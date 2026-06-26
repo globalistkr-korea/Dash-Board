@@ -430,7 +430,7 @@ function MonthlyView({ clff, region, subtype }) {
 }
 
 /* 한 엔티티(창고/고객) 상세 블록 — 매출/이익/마진 + 상승 원가항목 + 판정 */
-function EntityBlock({ e, L, mnD, pp }) {
+function EntityBlock({ e, L, mnD, pp, periodTag }) {
   const exited = e.revPrev > 0 && e.revCur < e.revPrev * 0.05;   // 매출 95%+ 감소 = 이탈/종료
   const entered = e.revPrev < 1 && e.revCur >= 1;                 // 신규 진입
   const check = !exited && e.marginPp != null && e.marginPp <= -1;       // 원가가 매출보다 빠름
@@ -451,13 +451,18 @@ function EntityBlock({ e, L, mnD, pp }) {
   return (
     <div className={`rounded-md px-2 py-1 ${check ? 'bg-red-50/60' : 'bg-slate-50/70'}`}>
       <div className="text-[12px] leading-snug">
-        <b className="text-slate-800">{e.name}</b>{e.turnedLoss ? <span className="text-red-500 text-[10px]">{L(' 적자전환', ' →loss')}</span> : null}{' '}
+        <b className="text-slate-800">{e.name}</b>
+        <span className="ml-1 text-[10px] text-slate-400">· {periodTag}</span>
+        {e.turnedLoss ? <span className="text-red-500 text-[10px]">{L(' 적자전환', ' →loss')}</span> : null}{' '}
         <span className="text-slate-500">{L('매출', 'Rev')} {pp(e.revPct)} · {L('이익', 'GP')} {e.gpDelta >= 0 ? '+' : ''}{mnD(e.gpDelta)} · {L('마진', 'mgn')} {mTxt}</span>{' '}
         <span className={verdict.col}>{verdict.txt}</span>
       </div>
       {!exited && rise.length > 0 && (
         <div className="text-[11px] text-slate-500 leading-snug pl-1">
-          ↳ {L('상승 원가', 'cost↑')}: {rise.map((x) => `${x.item.replace(/^(\d+)\.\s*/, '')} +${mnD(x.delta)}${x.structural ? '🔧' : ''}${x.pct != null && isFinite(x.pct) ? `(${pp(x.pct)})` : ''}`).join(', ')}
+          ↳ {L('상승 원가', 'cost↑')}: {rise.map((x) => {
+            const rate = x.ratioDeltaPp != null && isFinite(x.ratioDeltaPp) ? ` · ${L('원가율', 'ratio')} ${x.ratioCur.toFixed(1)}%(${pp(x.ratioDeltaPp)}p)` : '';
+            return `${x.item.replace(/^(\d+)\.\s*/, '')} +${mnD(x.delta)}${x.structural ? '🔧' : ''}${x.pct != null && isFinite(x.pct) ? `(${pp(x.pct)})` : ''}${rate}`;
+          }).join(', ')}
         </div>
       )}
     </div>
@@ -475,6 +480,7 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
   const items = costItemCompare(region, clff, biz, cmp);
   const mnD = (v) => Math.round(v).toLocaleString('ko-KR');
   const pp = (v) => (v == null || !isFinite(v) ? '-' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`);
+  const pct = (v) => (v == null || !isFinite(v) ? '-' : `${v.toFixed(1)}%`);
   const compress = d.anomaly || (d.marginPp != null && d.marginPp <= -0.5);
   const worst = (a) => a.filter((e) => e.gpDelta < -1).slice(0, 3);   // 악화 Top3
   const whW = worst(wh), cuW = worst(cu);
@@ -497,14 +503,14 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
       {/* 창고별 상세 */}
       <div className="space-y-1">
         <div className="text-[11px] font-semibold text-slate-500">{L('▌창고별 점검', '▌By warehouse')}</div>
-        {whW.length ? whW.map((e) => <EntityBlock key={e.name} e={e} L={L} mnD={mnD} pp={pp} />)
+        {whW.length ? whW.map((e) => <EntityBlock key={e.name} e={e} L={L} mnD={mnD} pp={pp} periodTag={tag} />)
           : <div className="text-[11px] text-slate-400 pl-1">{L('이익 악화 창고 없음.', 'No declining warehouse.')}</div>}
       </div>
 
       {/* 고객별 상세 */}
       <div className="space-y-1">
         <div className="text-[11px] font-semibold text-slate-500">{L('▌고객사별 점검', '▌By customer')}</div>
-        {cuW.length ? cuW.map((e) => <EntityBlock key={e.name} e={e} L={L} mnD={mnD} pp={pp} />)
+        {cuW.length ? cuW.map((e) => <EntityBlock key={e.name} e={e} L={L} mnD={mnD} pp={pp} periodTag={tag} />)
           : <div className="text-[11px] text-slate-400 pl-1">{L('이익 악화 고객 없음.', 'No declining customer.')}</div>}
       </div>
 
@@ -517,7 +523,8 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
               <th className="text-right font-normal">{L('전기', 'Base')}</th>
               <th className="text-right font-normal">{L('당기', 'Now')}</th>
               <th className="text-right font-normal">Δ</th>
-              <th className="text-right font-normal">%</th>
+              <th className="text-right font-normal">{L('원가율', 'Ratio')}</th>
+              <th className="text-right font-normal">{L('평균差', 'vs Avg')}</th>
               <th className="text-right font-normal">{L('판정', 'Pattern')}</th>
             </tr>
           </thead>
@@ -528,13 +535,16 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
                 <td className="text-right tabular-nums text-slate-400">{mnD(it.prev)}</td>
                 <td className="text-right tabular-nums text-slate-700">{mnD(it.cur)}</td>
                 <td className={`text-right tabular-nums font-medium ${it.delta > 0 ? 'text-red-500' : 'text-blue-600'}`}>{it.delta >= 0 ? '+' : ''}{mnD(it.delta)}</td>
-                <td className={`text-right tabular-nums ${it.delta > 0 ? 'text-red-400' : 'text-blue-400'}`}>{pp(it.pct)}</td>
-                <td className={`text-right whitespace-nowrap ${it.delta <= 0 ? 'text-blue-500' : it.structural ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
-                  {it.delta <= 0
-                    ? L('감소', 'Down')
-                    : it.structural
-                      ? L('반복↑', 'Repeated↑')
-                      : L('확인 필요', 'Check')}
+                <td className={`text-right tabular-nums ${it.ratioDeltaPp > 0 ? 'text-red-500' : it.ratioDeltaPp < 0 ? 'text-blue-500' : 'text-slate-400'}`}>{pct(it.ratioCur)}</td>
+                <td className={`text-right tabular-nums ${it.avgDeltaPp > 0 ? 'text-red-500' : it.avgDeltaPp < 0 ? 'text-blue-500' : 'text-slate-400'}`}>{pp(it.avgDeltaPp)}p</td>
+                <td className={`text-right whitespace-nowrap ${it.ratioOutlier ? 'text-red-600 font-medium' : it.delta <= 0 ? 'text-blue-500' : it.structural ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
+                  {it.ratioOutlier
+                    ? L('원가율 이탈', 'Ratio gap')
+                    : it.delta <= 0
+                      ? L('감소', 'Down')
+                      : it.structural
+                        ? L('반복↑', 'Repeated↑')
+                        : L('확인 필요', 'Check')}
                 </td>
               </tr>
             ))}

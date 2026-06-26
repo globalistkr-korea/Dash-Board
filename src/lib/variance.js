@@ -22,6 +22,13 @@ const pickSum = (arr, months) => months.reduce((s, i) => s + (arr?.[i] || 0), 0)
 const pSpan = (year, metric, clff, region, subtype, months) => pickSum(planSeries(year, metric, clff, region, subtype), months);
 const yo = (a, b) => (a ? ((b - a) / Math.abs(a)) * 100 : null);
 const analysisCount = (cmp) => Math.max(1, ...cmp.cm.map((i) => i + 1));
+const ratioPct = (cost, revenue) => (revenue ? (cost / revenue) * 100 : null);
+const avgMonthlyRatioPct = (costSeries, revSeries, months) => {
+  const rows = months
+    .map((i) => ratioPct(costSeries?.[i] || 0, revSeries?.[i] || 0))
+    .filter((v) => v != null && Number.isFinite(v));
+  return rows.length ? rows.reduce((sum, v) => sum + v, 0) / rows.length : null;
+};
 
 // 1) 진단
 export function marginDiagnosis(cmp, clff = '전체', region = '전체', subtype = '전체') {
@@ -109,9 +116,22 @@ export function entityDetails(kind, region = '전체', clff = '전체', biz = '�
     const m0 = r0 ? (g0 / r0) * 100 : null, m1 = r1 ? (g1 / r1) * 100 : null;
     const rising = Object.keys(v.items || {}).map((it) => {
       const a = pickSum(v.items[it][cmp.by], cmp.bm), b = pickSum(v.items[it][cmp.cy], cmp.cm);
+      const r0 = ratioPct(a, pickSum(v.revenue?.[cmp.by], cmp.bm));
+      const r1 = ratioPct(b, pickSum(v.revenue?.[cmp.cy], cmp.cm));
       const months = analysisCount(cmp);
       let up = 0; for (let i = 0; i < months; i++) if ((v.items[it][CURRENT_YEAR]?.[i] || 0) > (v.items[it][PREV]?.[i] || 0) * 1.1) up++;
-      return { item: it, prev: a, cur: b, delta: b - a, pct: a ? ((b - a) / a) * 100 : null, structural: up >= Math.ceil(months * 0.6) };
+      return {
+        item: it,
+        prev: a,
+        cur: b,
+        delta: b - a,
+        pct: a ? ((b - a) / a) * 100 : null,
+        ratioPrev: r0,
+        ratioCur: r1,
+        ratioDeltaPp: r0 != null && r1 != null ? r1 - r0 : null,
+        avgRatioCurYtd: avgMonthlyRatioPct(v.items[it][CURRENT_YEAR], v.revenue?.[CURRENT_YEAR], range(months)),
+        structural: up >= Math.ceil(months * 0.6),
+      };
     }).sort((a, b) => b.delta - a.delta);
     out.push({
       name: e.name, region: e.region,
@@ -128,8 +148,13 @@ export function entityDetails(kind, region = '전체', clff = '전체', biz = '�
 // 원가 항목별 비교 (biz로 좁힘) — 전기→당기, 증감 큰 순
 export function costItemCompare(region = '전체', clff = '전체', biz = '전체', cmp) {
   const acc = {};
+  const revenue = { [PREV]: Array(12).fill(0), [CURRENT_YEAR]: Array(12).fill(0) };
   for (const e of opsList('warehouses', region, clff)) {
     const v = view(e, clff, biz);
+    for (let i = 0; i < 12; i++) {
+      revenue[PREV][i] += (v.revenue?.[PREV]?.[i] || 0);
+      revenue[CURRENT_YEAR][i] += (v.revenue?.[CURRENT_YEAR]?.[i] || 0);
+    }
     for (const it of Object.keys(v.items || {})) {
       if (!acc[it]) acc[it] = { [PREV]: Array(12).fill(0), [CURRENT_YEAR]: Array(12).fill(0) };
       for (let i = 0; i < 12; i++) { acc[it][PREV][i] += (v.items[it][PREV]?.[i] || 0); acc[it][CURRENT_YEAR][i] += (v.items[it][CURRENT_YEAR]?.[i] || 0); }
@@ -137,11 +162,44 @@ export function costItemCompare(region = '전체', clff = '전체', biz = '전�
   }
   return Object.entries(acc).map(([item, v]) => {
     const a = pickSum(v[cmp.by], cmp.bm), b = pickSum(v[cmp.cy], cmp.cm);
+    const revPrev = pickSum(revenue[cmp.by], cmp.bm);
+    const revCur = pickSum(revenue[cmp.cy], cmp.cm);
     const months = analysisCount(cmp);
     let up = 0;
     for (let i = 0; i < months; i++) if ((v[CURRENT_YEAR][i] || 0) > (v[PREV][i] || 0) * 1.1) up++;
-    return { item, prev: a, cur: b, delta: b - a, pct: a ? ((b - a) / a) * 100 : null, structural: up >= Math.ceil(months * 0.6) };
+    const ratioPrev = ratioPct(a, revPrev);
+    const ratioCur = ratioPct(b, revCur);
+    const avgRatioPrevYear = avgMonthlyRatioPct(v[PREV], revenue[PREV], range(months));
+    const avgRatioCurYtd = avgMonthlyRatioPct(v[CURRENT_YEAR], revenue[CURRENT_YEAR], range(months));
+    const avgDeltaPp = ratioCur != null && avgRatioCurYtd != null ? ratioCur - avgRatioCurYtd : null;
+    const prevAvgDeltaPp = ratioCur != null && avgRatioPrevYear != null ? ratioCur - avgRatioPrevYear : null;
+    return {
+      item,
+      prev: a,
+      cur: b,
+      delta: b - a,
+      pct: a ? ((b - a) / a) * 100 : null,
+      revPrev,
+      revCur,
+      ratioPrev,
+      ratioCur,
+      ratioDeltaPp: ratioPrev != null && ratioCur != null ? ratioCur - ratioPrev : null,
+      avgRatioCurYtd,
+      avgRatioPrevYear,
+      avgDeltaPp,
+      prevAvgDeltaPp,
+      ratioOutlier: avgDeltaPp != null && Math.abs(avgDeltaPp) >= 1,
+      structural: up >= Math.ceil(months * 0.6),
+    };
   }).filter((r) => Math.abs(r.delta) >= 1).sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+}
+
+// 매출 대비 원가율 기준 이탈 항목. 금액 증감과 별개로 평균 비율에서 벗어난 항목을 잡는다.
+export function costRatioOutliers(region = '전체', clff = '전체', biz = '전체', cmp, topN = 5) {
+  return costItemCompare(region, clff, biz, cmp)
+    .filter((item) => item.ratioOutlier || Math.abs(item.ratioDeltaPp || 0) >= 1)
+    .sort((a, b) => Math.abs(b.avgDeltaPp || b.ratioDeltaPp || 0) - Math.abs(a.avgDeltaPp || a.ratioDeltaPp || 0))
+    .slice(0, topN);
 }
 
 // 특정 원가 항목의 증가분이 어느 창고/고객사에서 발생했는지 분해.
@@ -154,6 +212,8 @@ export function costItemContributors(kind, item, region = '전체', clff = '전�
     if (!itemSeries) continue;
     const prev = pickSum(itemSeries[cmp.by], cmp.bm);
     const cur = pickSum(itemSeries[cmp.cy], cmp.cm);
+    const revPrev = pickSum(v.revenue?.[cmp.by], cmp.bm);
+    const revCur = pickSum(v.revenue?.[cmp.cy], cmp.cm);
     const delta = cur - prev;
     if (direction === 'increase' ? delta <= 0 : delta >= 0) continue;
     rows.push({
@@ -163,6 +223,11 @@ export function costItemContributors(kind, item, region = '전체', clff = '전�
       cur,
       delta,
       pct: prev ? (delta / Math.abs(prev)) * 100 : null,
+      ratioPrev: ratioPct(prev, revPrev),
+      ratioCur: ratioPct(cur, revCur),
+      ratioDeltaPp: ratioPct(prev, revPrev) != null && ratioPct(cur, revCur) != null
+        ? ratioPct(cur, revCur) - ratioPct(prev, revPrev)
+        : null,
     });
   }
   const directionTotal = rows.reduce((sum, row) => sum + Math.abs(row.delta), 0);
