@@ -3,6 +3,9 @@ import {
   entityDetails, marginDiagnosis, costItemCompare, costItemContributors,
   costDataQualityAlerts, costRatioOutliers, subtypeToBiz, costItemThresholdPp,
 } from '../lib/variance';
+import {
+  loadCloudStatus, loadReportNotesFromCloud, saveReportNotesToCloud,
+} from '../lib/reportNotesStore';
 import { useLang } from '../context/LangContext';
 
 const NOTE_PREFIX = 'vn_dashboard_report_notes_v1:';
@@ -499,10 +502,37 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const [copiedId, setCopiedId] = useState(null);
   const [copiedRowId, setCopiedRowId] = useState(null);
   const [copyMode, setCopyMode] = useState('owner');
+  const [cloudStatus, setCloudStatus] = useState(() => loadCloudStatus(noteKey));
+  const [activeNoteKey, setActiveNoteKey] = useState(noteKey);
 
   useEffect(() => {
+    if (activeNoteKey !== noteKey) return undefined;
     localStorage.setItem(NOTE_PREFIX + noteKey, JSON.stringify(notes));
-  }, [noteKey, notes]);
+    const saveTimer = window.setTimeout(async () => {
+      const ok = await saveReportNotesToCloud(noteKey, notes);
+      setCloudStatus(ok ? 'synced' : 'local');
+    }, 700);
+    return () => window.clearTimeout(saveTimer);
+  }, [activeNoteKey, noteKey, notes]);
+
+  useEffect(() => {
+    let alive = true;
+    const loadTimer = window.setTimeout(async () => {
+      if (!alive) return;
+      const localNotes = loadNotes(noteKey);
+      setNotes(localNotes);
+      setActiveNoteKey(noteKey);
+      setCloudStatus(loadCloudStatus(noteKey));
+      const cloudNotes = await loadReportNotesFromCloud(noteKey);
+      if (!alive || !cloudNotes) return;
+      setNotes((current) => ({ ...current, ...cloudNotes }));
+      setCloudStatus('synced');
+    }, 0);
+    return () => {
+      alive = false;
+      window.clearTimeout(loadTimer);
+    };
+  }, [noteKey]);
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -700,6 +730,23 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       return b.priority.score - a.priority.score;
     })
     .slice(0, 5);
+  const cloudStatusInfo = {
+    synced: {
+      label: L('클라우드 저장됨', 'Cloud saved'),
+      className: 'bg-emerald-100 text-emerald-700',
+    },
+    ready: {
+      label: L('클라우드 준비됨', 'Cloud ready'),
+      className: 'bg-blue-100 text-blue-700',
+    },
+    local: {
+      label: L('기기 저장 중', 'Local save'),
+      className: 'bg-slate-100 text-slate-600',
+    },
+  }[cloudStatus] || {
+    label: L('기기 저장 중', 'Local save'),
+    className: 'bg-slate-100 text-slate-600',
+  };
   const updateItemThreshold = (key, value) => {
     const parsed = Number(value);
     setSettings((current) => ({
@@ -722,22 +769,32 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     return costItemThresholdPp(itemName || '');
   };
   const copyQuestion = async (item) => {
-    const text = copyMode === 'owner'
+    const text = copyMode === 'report'
       ? [
-        `[확인 요청] ${item.title}`,
-        item.evidence,
-        item.warehouseDetail ? `관련 창고: ${item.warehouseDetail}` : '',
-        item.customerDetail ? `관련 고객사: ${item.customerDetail}` : '',
-        `확인 부탁드립니다: ${item.question}`,
-        '확인 후 실제 사유와 근거 금액/기간을 회신 부탁드립니다.',
-      ].filter(Boolean).join('\n')
-      : [
         `[${item.title}]`,
         item.evidence,
         item.warehouseDetail ? `어디 창고: ${item.warehouseDetail}` : '',
         item.customerDetail ? `어느 고객사: ${item.customerDetail}` : '',
         `보고 메모: ${item.question}`,
-      ].filter(Boolean).join('\n');
+      ].filter(Boolean).join('\n')
+      : copyMode === 'mail'
+        ? [
+          `[확인 요청] ${item.title}`,
+          '',
+          '안녕하세요. 아래 항목의 변동 사유 확인 부탁드립니다.',
+          item.evidence,
+          item.warehouseDetail ? `관련 창고: ${item.warehouseDetail}` : '',
+          item.customerDetail ? `관련 고객사: ${item.customerDetail}` : '',
+          `확인 요청사항: ${item.question}`,
+          '확인 후 실제 사유, 관련 기간, 근거 금액이 있다면 함께 회신 부탁드립니다.',
+        ].filter(Boolean).join('\n')
+        : [
+          `[확인요청] ${item.title}`,
+          item.evidence,
+          item.warehouseDetail ? `창고: ${item.warehouseDetail}` : '',
+          item.customerDetail ? `고객사: ${item.customerDetail}` : '',
+          `확인: ${item.question}`,
+        ].filter(Boolean).join('\n');
     const ok = await copyText(text);
     setCopiedId(ok ? item.id : `fail:${item.id}`);
     window.setTimeout(() => setCopiedId(null), 1800);
@@ -753,27 +810,56 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
         : '',
       row.share != null ? `${L('기여도', 'Share')}: ${row.share.toFixed(0)}%` : '',
     ].filter(Boolean);
-    const text = copyMode === 'owner'
+    const text = copyMode === 'report'
       ? [
-        `[확인 요청] ${item.title}`,
-        ...common,
-        L(
-          `${row.name} 담당자님, 실제 물량·작업시간·단가·계약 조건·비용 배부·일회성/누락/이월 비용 중 어떤 요인인지 확인 부탁드립니다. 가능하면 수량 효과와 단가 효과를 나눠서 회신 부탁드립니다.`,
-          `Please confirm whether ${row.name}'s change came from actual volume, work hours, rates, contract terms, cost allocation, one-off cost, omission, or deferred cost. If possible, split the reason into quantity effect and rate effect.`,
-        ),
-      ].join('\n')
-      : [
         `[보고용] ${item.title}`,
         ...common,
         L(
           `${row.name}은(는) ${verdict.label} 대상으로, 담당자 확인 후 실제 사유를 보고 메모에 반영합니다.`,
           `${row.name} is flagged as ${verdict.label}; confirmed owner input should be reflected in the report note.`,
         ),
-      ].join('\n');
+      ].join('\n')
+      : copyMode === 'mail'
+        ? [
+          `[확인 요청] ${item.title}`,
+          '',
+          '안녕하세요. 아래 대상의 변동 사유 확인 부탁드립니다.',
+          ...common,
+          L(
+            `${row.name} 담당자님, 실제 물량·작업시간·단가·계약 조건·비용 배부·일회성/누락/이월 비용 중 어떤 요인인지 확인 부탁드립니다. 가능하면 수량 효과와 단가 효과를 나눠서 회신 부탁드립니다.`,
+            `Please confirm whether ${row.name}'s change came from actual volume, work hours, rates, contract terms, cost allocation, one-off cost, omission, or deferred cost. If possible, split the reason into quantity effect and rate effect.`,
+          ),
+        ].join('\n')
+        : [
+          `[확인요청] ${item.title}`,
+          ...common,
+          L(
+            `${row.name} 변동 사유 확인 부탁드립니다. 물량/작업시간/단가/계약/배부/일회성/누락/이월 중 어떤 요인인지, 가능하면 수량 효과와 단가 효과를 나눠 알려주세요.`,
+            `Please check ${row.name}'s change. Was it volume/work hours/rate/contract/allocation/one-off/omission/deferred cost? If possible, split quantity and rate effects.`,
+          ),
+        ].join('\n');
     const rowId = `${scope}:${kind}:${row.name}`;
     const ok = await copyText(text);
     setCopiedRowId(ok ? rowId : `fail:${rowId}`);
     window.setTimeout(() => setCopiedRowId(null), 1800);
+  };
+  const copyPriorityChecks = async () => {
+    const text = [
+      copyMode === 'report' ? '[보고용] 오늘 우선 확인 TOP 5' : '[확인 요청] 오늘 우선 확인 TOP 5',
+      ...priorityChecks.map((item, index) => [
+        `${index + 1}. ${item.title}`,
+        `- ${L('판정', 'Flag')}: ${item.confirmed ? L('확인 완료', 'Confirmed') : item.priority.label}`,
+        `- ${L('근거', 'Evidence')}: ${item.evidence}`,
+        copyMode === 'report'
+          ? `- ${L('보고 메모', 'Report note')}: 담당자 확인 후 실제 사유를 반영합니다.`
+          : copyMode === 'mail'
+            ? `- ${L('요청', 'Request')}: ${item.question} ${L('확인 후 실제 사유와 근거 금액/기간을 회신 부탁드립니다.', 'Please reply with the confirmed reason and supporting amount/period.')}`
+            : `- ${L('확인', 'Check')}: ${item.question}`,
+      ].join('\n')),
+    ].join('\n\n');
+    const ok = await copyText(text);
+    setCopiedId(ok ? 'priority' : 'fail:priority');
+    window.setTimeout(() => setCopiedId(null), 1800);
   };
 
   return (
@@ -915,9 +1001,18 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                 <div className="text-[11px] font-semibold text-amber-800">
                   {L('3. 오늘 우선 확인 TOP 5', '3. Priority check TOP 5')}
                 </div>
-                <span className="text-[10px] text-amber-600">
-                  {L('미확인 우선 · 수치 기반', 'Unconfirmed first · data-based')}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-amber-600">
+                    {L('미확인 우선 · 수치 기반', 'Unconfirmed first · data-based')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={copyPriorityChecks}
+                    className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700 hover:border-amber-400"
+                  >
+                    {copiedId === 'priority' ? L('복사됨', 'Copied') : copiedId === 'fail:priority' ? L('복사 실패', 'Copy failed') : L('TOP 5 복사', 'Copy TOP 5')}
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {priorityChecks.map((item, index) => (
@@ -951,7 +1046,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[10px] font-semibold text-slate-500">{L('복사 문구', 'Copy wording')}</span>
                 {[
-                  { id: 'owner', label: L('담당자 문의용', 'For owner inquiry') },
+                  { id: 'owner', label: L('카톡형', 'Chat') },
+                  { id: 'mail', label: L('메일형', 'Email') },
                   { id: 'report', label: L('보고용', 'For report') },
                 ].map((mode) => (
                   <button
@@ -965,13 +1061,20 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                 ))}
                 <span className="text-[10px] text-slate-400">
                   {copyMode === 'owner'
-                    ? L('담당자에게 바로 보낼 질문 형식입니다.', 'Question wording ready to send to owners.')
-                    : L('보고서/발표 메모에 붙이기 좋은 형식입니다.', 'Report/presentation note wording.')}
+                    ? L('짧게 바로 보내는 문의 문구입니다.', 'Short inquiry wording.')
+                    : copyMode === 'mail'
+                      ? L('메일에 붙이기 좋은 상세 문의 문구입니다.', 'Detailed email inquiry wording.')
+                      : L('보고서/발표 메모에 붙이기 좋은 형식입니다.', 'Report/presentation note wording.')}
                 </span>
               </div>
-              <p className="mt-1 text-[10px] text-slate-400">
-                {L('확인 사유는 현재 조건별로 자동 저장되어 같은 월·지역·구분으로 다시 열면 다시 확인할 수 있습니다.', 'Confirmed reasons are saved by the current period/region/category and can be reviewed again when reopened with the same conditions.')}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cloudStatusInfo.className}`}>
+                  {cloudStatusInfo.label}
+                </span>
+                <p className="text-[10px] text-slate-400">
+                  {L('확인 사유는 현재 조건별로 자동 저장되어 같은 월·지역·구분으로 다시 열면 다시 확인할 수 있습니다.', 'Confirmed reasons are saved by the current period/region/category and can be reviewed again when reopened with the same conditions.')}
+                </p>
+              </div>
             </div>
             <div className="mb-2 flex flex-wrap items-center gap-1">
               {checkFilterOptions.map((filter) => (
