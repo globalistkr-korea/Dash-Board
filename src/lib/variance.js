@@ -29,6 +29,21 @@ const avgMonthlyRatioPct = (costSeries, revSeries, months) => {
     .filter((v) => v != null && Number.isFinite(v));
   return rows.length ? rows.reduce((sum, v) => sum + v, 0) / rows.length : null;
 };
+const recentMonths = (endMonth, count) => {
+  const end = Math.max(1, endMonth);
+  const start = Math.max(0, end - count);
+  return Array.from({ length: end - start }, (_, i) => start + i);
+};
+const ratioTrend = (costSeries, revSeries, months) => months.map((i) => ({
+  month: i + 1,
+  ratio: ratioPct(costSeries?.[i] || 0, revSeries?.[i] || 0),
+}));
+const basisValue = (item, basis = 'curYtd') => {
+  if (basis === 'prevSame') return item.avgRatioPrevYear;
+  if (basis === 'recent3') return item.avgRatioRecent3;
+  if (basis === 'recent5') return item.avgRatioRecent5;
+  return item.avgRatioCurYtd;
+};
 
 // 1) 진단
 export function marginDiagnosis(cmp, clff = '전체', region = '전체', subtype = '전체') {
@@ -165,14 +180,20 @@ export function costItemCompare(region = '전체', clff = '전체', biz = '전�
     const revPrev = pickSum(revenue[cmp.by], cmp.bm);
     const revCur = pickSum(revenue[cmp.cy], cmp.cm);
     const months = analysisCount(cmp);
+    const recent3 = recentMonths(months, 3);
+    const recent5 = recentMonths(months, 5);
     let up = 0;
     for (let i = 0; i < months; i++) if ((v[CURRENT_YEAR][i] || 0) > (v[PREV][i] || 0) * 1.1) up++;
     const ratioPrev = ratioPct(a, revPrev);
     const ratioCur = ratioPct(b, revCur);
     const avgRatioPrevYear = avgMonthlyRatioPct(v[PREV], revenue[PREV], range(months));
     const avgRatioCurYtd = avgMonthlyRatioPct(v[CURRENT_YEAR], revenue[CURRENT_YEAR], range(months));
+    const avgRatioRecent3 = avgMonthlyRatioPct(v[CURRENT_YEAR], revenue[CURRENT_YEAR], recent3);
+    const avgRatioRecent5 = avgMonthlyRatioPct(v[CURRENT_YEAR], revenue[CURRENT_YEAR], recent5);
     const avgDeltaPp = ratioCur != null && avgRatioCurYtd != null ? ratioCur - avgRatioCurYtd : null;
     const prevAvgDeltaPp = ratioCur != null && avgRatioPrevYear != null ? ratioCur - avgRatioPrevYear : null;
+    const recent3DeltaPp = ratioCur != null && avgRatioRecent3 != null ? ratioCur - avgRatioRecent3 : null;
+    const recent5DeltaPp = ratioCur != null && avgRatioRecent5 != null ? ratioCur - avgRatioRecent5 : null;
     return {
       item,
       prev: a,
@@ -186,19 +207,37 @@ export function costItemCompare(region = '전체', clff = '전체', biz = '전�
       ratioDeltaPp: ratioPrev != null && ratioCur != null ? ratioCur - ratioPrev : null,
       avgRatioCurYtd,
       avgRatioPrevYear,
+      avgRatioRecent3,
+      avgRatioRecent5,
       avgDeltaPp,
       prevAvgDeltaPp,
-      ratioOutlier: avgDeltaPp != null && Math.abs(avgDeltaPp) >= 1,
+      recent3DeltaPp,
+      recent5DeltaPp,
+      ratioTrend3: ratioTrend(v[CURRENT_YEAR], revenue[CURRENT_YEAR], recent3),
+      ratioTrend5: ratioTrend(v[CURRENT_YEAR], revenue[CURRENT_YEAR], recent5),
+      ratioOutlier: avgDeltaPp != null && Math.abs(avgDeltaPp) >= 5,
       structural: up >= Math.ceil(months * 0.6),
     };
   }).filter((r) => Math.abs(r.delta) >= 1).sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
 }
 
 // 매출 대비 원가율 기준 이탈 항목. 금액 증감과 별개로 평균 비율에서 벗어난 항목을 잡는다.
-export function costRatioOutliers(region = '전체', clff = '전체', biz = '전체', cmp, topN = 5) {
+export function costRatioOutliers(region = '전체', clff = '전체', biz = '전체', cmp, topN = 5, options = {}) {
+  const { basis = 'curYtd', thresholdPp = 5 } = options;
   return costItemCompare(region, clff, biz, cmp)
-    .filter((item) => item.ratioOutlier || Math.abs(item.ratioDeltaPp || 0) >= 1)
-    .sort((a, b) => Math.abs(b.avgDeltaPp || b.ratioDeltaPp || 0) - Math.abs(a.avgDeltaPp || a.ratioDeltaPp || 0))
+    .map((item) => {
+      const baselineRatio = basisValue(item, basis);
+      const basisDeltaPp = item.ratioCur != null && baselineRatio != null ? item.ratioCur - baselineRatio : null;
+      return {
+        ...item,
+        basis,
+        baselineRatio,
+        basisDeltaPp,
+        ratioOutlier: basisDeltaPp != null && Math.abs(basisDeltaPp) >= thresholdPp,
+      };
+    })
+    .filter((item) => item.ratioOutlier)
+    .sort((a, b) => Math.abs(b.basisDeltaPp || 0) - Math.abs(a.basisDeltaPp || 0))
     .slice(0, topN);
 }
 

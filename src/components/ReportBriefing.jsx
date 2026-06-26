@@ -23,12 +23,70 @@ const ratio = (value) => (
     ? '-'
     : `${value.toFixed(1)}%`
 );
+const THRESHOLDS = [3, 5, 10];
+const baselineOptions = (throughMonth, L) => [
+  { value: 'curYtd', label: L(`26년 1~${throughMonth}월 평균`, `2026 Jan-${throughMonth}M avg`) },
+  { value: 'prevSame', label: L('25년 동일기간 평균', '2025 same-period avg') },
+  { value: 'recent3', label: L('최근 3개월 평균', 'Recent 3M avg') },
+  { value: 'recent5', label: L('최근 5개월 평균', 'Recent 5M avg') },
+];
+const baselineLabel = (basis, throughMonth, L) => (
+  baselineOptions(throughMonth, L).find((option) => option.value === basis)?.label
+  || baselineOptions(throughMonth, L)[0].label
+);
 const contributionText = (rows, L, direction = 'increase') => rows.map((row) => {
   const shareLabel = direction === 'increase' ? L('증가 대상 내', 'share among increases') : L('감소 대상 내', 'share among decreases');
   const share = row.share != null ? `, ${shareLabel} ${row.share.toFixed(0)}%` : '';
   const rate = row.ratioDeltaPp != null ? `, ${L('원가율', 'cost ratio')} ${ratio(row.ratioPrev)}→${ratio(row.ratioCur)}(${pp(row.ratioDeltaPp)})` : '';
   return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
 }).join(' · ');
+
+function MiniRatioChart({ rows = [], baseline, thresholdPp, L }) {
+  const values = rows.map((row) => row.ratio).filter((value) => value != null && Number.isFinite(value));
+  if (values.length === 0 || baseline == null || !Number.isFinite(baseline)) return null;
+  const minValue = Math.min(...values, baseline - thresholdPp);
+  const maxValue = Math.max(...values, baseline + thresholdPp);
+  const pad = Math.max((maxValue - minValue) * 0.15, 1);
+  const min = minValue - pad;
+  const max = maxValue + pad;
+  const x = (index) => rows.length <= 1 ? 8 : 8 + (index * 104) / (rows.length - 1);
+  const y = (value) => 44 - ((value - min) / (max - min || 1)) * 32;
+  const points = rows
+    .map((row, index) => (row.ratio == null || !Number.isFinite(row.ratio) ? null : `${x(index)},${y(row.ratio)}`))
+    .filter(Boolean)
+    .join(' ');
+  const baselineY = y(baseline);
+  const upperY = y(baseline + thresholdPp);
+  const lowerY = y(baseline - thresholdPp);
+  const last = rows[rows.length - 1];
+
+  return (
+    <div className="mt-1.5 rounded-md bg-slate-50 px-2 py-1.5">
+      <div className="flex items-center justify-between text-[10px] text-slate-500">
+        <span>{L('최근 원가율 추이', 'Recent cost-ratio trend')}</span>
+        <span>{L('기준', 'base')} {ratio(baseline)} · ±{thresholdPp}%p</span>
+      </div>
+      <div className="flex items-end gap-2">
+        <svg viewBox="0 0 120 52" className="h-12 flex-1" aria-label={L('최근 원가율 미니 차트', 'Recent cost-ratio mini chart')}>
+          <line x1="6" x2="114" y1={upperY} y2={upperY} stroke="#fecaca" strokeWidth="1" strokeDasharray="3 3" />
+          <line x1="6" x2="114" y1={baselineY} y2={baselineY} stroke="#cbd5e1" strokeWidth="1.2" strokeDasharray="4 3" />
+          <line x1="6" x2="114" y1={lowerY} y2={lowerY} stroke="#bfdbfe" strokeWidth="1" strokeDasharray="3 3" />
+          <polyline points={points} fill="none" stroke="#f97316" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          {rows.map((row, index) => (
+            row.ratio == null || !Number.isFinite(row.ratio) ? null : (
+              <circle key={row.month} cx={x(index)} cy={y(row.ratio)} r="2.3" fill="#f97316" />
+            )
+          ))}
+        </svg>
+        <div className="min-w-[64px] text-right text-[10px] text-slate-500">
+          <div className="font-semibold text-slate-700">{last ? `${last.month}월 ${ratio(last.ratio)}` : '-'}</div>
+          <div>{L('상한', 'upper')} {ratio(baseline + thresholdPp)}</div>
+          <div>{L('하한', 'lower')} {ratio(baseline - thresholdPp)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function dropType(item, L) {
   if (item.cur === 0 && item.prev >= 100) return L('0원 전환·누락 의심', 'Zero value / possible omission');
@@ -77,6 +135,9 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const throughMonth = Math.max(...cmp.cm.map((i) => i + 1));
   const curAvgLabel = L(`26년 1~${throughMonth}월 평균`, `2026 Jan-${throughMonth}M avg`);
   const prevAvgLabel = L(`25년 동일기간 평균`, `2025 same-period avg`);
+  const [baseline, setBaseline] = useState('curYtd');
+  const [thresholdPp, setThresholdPp] = useState(5);
+  const selectedBaselineLabel = baselineLabel(baseline, throughMonth, L);
   const diagnosis = useMemo(
     () => marginDiagnosis(cmp, clff, region, subtype),
     [cmp, clff, region, subtype],
@@ -102,8 +163,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     [region, clff, biz, cmp],
   );
   const rateOutliers = useMemo(
-    () => costRatioOutliers(region, clff, biz, cmp, 5),
-    [region, clff, biz, cmp],
+    () => costRatioOutliers(region, clff, biz, cmp, 5, { basis: baseline, thresholdPp }),
+    [region, clff, biz, cmp, baseline, thresholdPp],
   );
   const noteKey = [
     cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype,
@@ -169,12 +230,15 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     ].filter(Boolean).join(' / ');
     return {
       id: `rate:${item.item}`,
-      urgent: Math.abs(item.avgDeltaPp || 0) >= 2,
+      urgent: Math.abs(item.basisDeltaPp || 0) >= thresholdPp,
       title: L(`${cleanItem(item.item)} 원가율 이탈`, `${cleanItem(item.item)} cost-ratio deviation`),
       evidence: L(
-        `금액은 ${money(item.prev)} → ${money(item.cur)}백만동(${item.delta >= 0 ? '+' : ''}${money(item.delta)})이고, 매출 대비 원가율은 ${ratio(item.ratioCur)}입니다. ${curAvgLabel} ${ratio(item.avgRatioCurYtd)} 대비 ${pp(item.avgDeltaPp)}, ${prevAvgLabel} ${ratio(item.avgRatioPrevYear)} 대비 ${pp(item.prevAvgDeltaPp)}입니다.`,
-        `Amount moved ${money(item.prev)} → ${money(item.cur)} M dong (${item.delta >= 0 ? '+' : ''}${money(item.delta)}), and the cost ratio is ${ratio(item.ratioCur)}. It is ${pp(item.avgDeltaPp)} vs the 2026 YTD average ${ratio(item.avgRatioCurYtd)} and ${pp(item.prevAvgDeltaPp)} vs the 2025 same-period average ${ratio(item.avgRatioPrevYear)}.`,
+        `금액은 ${money(item.prev)} → ${money(item.cur)}백만동(${item.delta >= 0 ? '+' : ''}${money(item.delta)})이고, 매출 대비 원가율은 ${ratio(item.ratioCur)}입니다. 선택 기준선 ${selectedBaselineLabel} ${ratio(item.baselineRatio)} 대비 ${pp(item.basisDeltaPp)}로, 임계값 ${thresholdPp}%p를 벗어났습니다. 참고로 ${curAvgLabel} 대비 ${pp(item.avgDeltaPp)}, ${prevAvgLabel} 대비 ${pp(item.prevAvgDeltaPp)}입니다.`,
+        `Amount moved ${money(item.prev)} → ${money(item.cur)} M dong (${item.delta >= 0 ? '+' : ''}${money(item.delta)}), and the cost ratio is ${ratio(item.ratioCur)}. It is ${pp(item.basisDeltaPp)} vs the selected baseline ${selectedBaselineLabel} ${ratio(item.baselineRatio)}, beyond the ${thresholdPp}pp threshold. For reference: ${pp(item.avgDeltaPp)} vs 2026 YTD and ${pp(item.prevAvgDeltaPp)} vs 2025 same-period.`,
       ),
+      chartRows: baseline === 'recent3' ? item.ratioTrend3 : item.ratioTrend5,
+      baselineRatio: item.baselineRatio,
+      thresholdPp,
       warehouseDetail: warehouseDrivers.length
         ? contributionText(warehouseDrivers, L, direction)
         : L('원가율 이탈 창고 특정 불가', 'No warehouse ratio driver identified'),
@@ -294,12 +358,43 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
             <div className="text-[11px] font-semibold text-slate-500 mb-1">
               {L('2. 앱에서 수치로 확인된 내용', '2. Verified by app data')}
             </div>
+            <div className="mb-2 rounded-md border border-blue-100 bg-white/70 p-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-semibold text-slate-500">{L('원가율 기준선', 'Cost-ratio baseline')}</span>
+                {baselineOptions(throughMonth, L).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setBaseline(option.value)}
+                    className={`rounded-full px-2 py-0.5 text-[10px] border ${baseline === option.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-slate-200 bg-white text-slate-500'}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-semibold text-slate-500">{L('이탈 임계값', 'Deviation threshold')}</span>
+                {THRESHOLDS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setThresholdPp(value)}
+                    className={`rounded-full px-2 py-0.5 text-[10px] border ${thresholdPp === value ? 'border-rose-500 bg-rose-50 text-rose-700 font-semibold' : 'border-slate-200 bg-white text-slate-500'}`}
+                  >
+                    ±{value}%p
+                  </button>
+                ))}
+                <span className="text-[10px] text-slate-400">
+                  {L('기본 5%p · 선택 즉시 아래 확인 대상이 갱신됩니다.', 'Default 5pp · changing it updates the checks below.')}
+                </span>
+              </div>
+            </div>
             <ul className="space-y-1 text-[12px] leading-relaxed text-slate-700">
               <li>• {L('매출', 'Revenue')} {signed(diagnosis.revYoY)} · {L('매출이익', 'Gross profit')} {signed(diagnosis.gpYoY)} · {L('이익률', 'Margin')} {diagnosis.m0?.toFixed(1) ?? '-'}% → {diagnosis.m1?.toFixed(1) ?? '-'}%</li>
               {topRateOutliers.map((item) => (
                 <li key={`rate-${item.item}`}>
                   • <span className="font-semibold text-amber-800">{cleanItem(item.item)} {L('원가율', 'cost ratio')}</span>:
-                  {' '}{ratio(item.ratioCur)} · {curAvgLabel} {L('대비', 'vs')} <b className={item.avgDeltaPp >= 0 ? 'text-red-600' : 'text-blue-600'}>{pp(item.avgDeltaPp)}</b>
+                  {' '}{ratio(item.ratioCur)} · {selectedBaselineLabel} {L('대비', 'vs')} <b className={item.basisDeltaPp >= 0 ? 'text-red-600' : 'text-blue-600'}>{pp(item.basisDeltaPp)}</b>
                   {' · '}{L('금액', 'amount')} {money(item.prev)} → {money(item.cur)} {L('백만동', 'M dong')}
                 </li>
               ))}
@@ -362,6 +457,14 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                           {L('※ 고객사 원가는 운영 배부 기준 참고치이며 창고 합계와 다를 수 있습니다.', '※ Customer costs are allocated operational figures and may differ from warehouse totals.')}
                         </span>
                       </div>
+                    )}
+                    {item.chartRows && (
+                      <MiniRatioChart
+                        rows={item.chartRows}
+                        baseline={item.baselineRatio}
+                        thresholdPp={item.thresholdPp}
+                        L={L}
+                      />
                     )}
                     <p className="mt-0.5 text-[11px] font-medium text-amber-800">→ {item.question}</p>
                     <textarea
