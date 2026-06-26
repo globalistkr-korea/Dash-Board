@@ -45,34 +45,49 @@ const contributionText = (rows, L, direction = 'increase') => rows.map((row) => 
   return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
 }).join(' · ');
 
-const contributorVerdict = (row, L) => {
+const contributorVerdict = (row, L, thresholdPp = 5) => {
   const ratioGap = row.ratioDeltaPp;
-  if (ratioGap != null && Number.isFinite(ratioGap) && ratioGap >= 5) {
+  if (ratioGap != null && Number.isFinite(ratioGap) && ratioGap >= thresholdPp) {
     return {
+      id: 'ratioUp',
       label: L('원가율↑ 확인', 'Ratio↑ check'),
       className: 'bg-rose-100 text-rose-700',
     };
   }
-  if (ratioGap != null && Number.isFinite(ratioGap) && ratioGap <= -5) {
+  if (ratioGap != null && Number.isFinite(ratioGap) && ratioGap <= -thresholdPp) {
     return {
+      id: 'ratioDown',
       label: L('원가율↓ 확인', 'Ratio↓ check'),
       className: 'bg-blue-100 text-blue-700',
     };
   }
   if (row.share != null && row.share >= 50) {
     return {
+      id: 'highShare',
       label: L('기여도 큼', 'High share'),
       className: 'bg-amber-100 text-amber-700',
     };
   }
   return {
+    id: 'note',
     label: L('참고', 'Note'),
     className: 'bg-slate-100 text-slate-600',
   };
 };
 
-function ContributorTable({ title, rows = [], tone = 'blue', L }) {
+function ContributorTable({
+  title,
+  rows = [],
+  tone = 'blue',
+  L,
+  verdictThreshold = 5,
+  onCopyRow,
+  copiedRowId,
+  copyKind,
+  copyScope,
+}) {
   const [sortBy, setSortBy] = useState('share');
+  const [flagFilter, setFlagFilter] = useState('all');
   const toneClass = tone === 'violet'
     ? { wrap: 'bg-violet-50/80 text-violet-950', head: 'text-violet-500', name: 'text-violet-900', active: 'border-violet-300 bg-white text-violet-700' }
     : { wrap: 'bg-blue-50/80 text-blue-950', head: 'text-blue-500', name: 'text-blue-900', active: 'border-blue-300 bg-white text-blue-700' };
@@ -82,12 +97,21 @@ function ContributorTable({ title, rows = [], tone = 'blue', L }) {
       if (sortBy === 'ratio') return Math.abs(row.ratioDeltaPp || 0);
       return row.share ?? 0;
     };
-    return [...rows].sort((a, b) => valueOf(b) - valueOf(a));
-  }, [rows, sortBy]);
+    return rows
+      .map((row) => ({ ...row, verdict: contributorVerdict(row, L, verdictThreshold) }))
+      .filter((row) => flagFilter === 'all' || row.verdict.id === flagFilter)
+      .sort((a, b) => valueOf(b) - valueOf(a));
+  }, [rows, sortBy, flagFilter, L, verdictThreshold]);
   const sortOptions = [
     { id: 'share', label: L('기여도순', 'Share') },
     { id: 'delta', label: L('증감액순', 'Amount') },
     { id: 'ratio', label: L('원가율순', 'Ratio') },
+  ];
+  const flagOptions = [
+    { id: 'all', label: L('전체', 'All'), count: rows.length },
+    { id: 'ratioUp', label: L('원가율↑', 'Ratio↑'), count: rows.filter((row) => contributorVerdict(row, L, verdictThreshold).id === 'ratioUp').length },
+    { id: 'ratioDown', label: L('원가율↓', 'Ratio↓'), count: rows.filter((row) => contributorVerdict(row, L, verdictThreshold).id === 'ratioDown').length },
+    { id: 'highShare', label: L('기여도 큼', 'High share'), count: rows.filter((row) => contributorVerdict(row, L, verdictThreshold).id === 'highShare').length },
   ];
   if (!rows.length) return null;
 
@@ -95,6 +119,9 @@ function ContributorTable({ title, rows = [], tone = 'blue', L }) {
     <div className={`mt-1 rounded ${toneClass.wrap} p-2`}>
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
         <div className="text-[11px] font-bold">{title}</div>
+        <span className="rounded-full bg-white/50 px-1.5 py-0.5 text-[10px] text-slate-500">
+          {L('판정 기준', 'Flag threshold')} ±{verdictThreshold}%p
+        </span>
         {tone === 'violet' && (
           <div className="group relative">
             <span className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-600">?</span>
@@ -119,8 +146,21 @@ function ContributorTable({ title, rows = [], tone = 'blue', L }) {
           ))}
         </div>
       </div>
+      <div className="mb-1 flex flex-wrap gap-1">
+        {flagOptions.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setFlagFilter(option.id)}
+            disabled={option.count === 0 && option.id !== 'all'}
+            className={`rounded-full border px-1.5 py-0.5 text-[10px] ${flagFilter === option.id ? toneClass.active : 'border-white/80 bg-white/40 text-slate-500'} disabled:opacity-40`}
+          >
+            {option.label} {option.count}
+          </button>
+        ))}
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[650px] text-[11px]">
+        <table className="w-full min-w-[760px] text-[11px]">
           <thead>
             <tr className={`border-b border-white/70 ${toneClass.head}`}>
               <th className="py-1 pr-2 text-left font-medium">{L('대상', 'Target')}</th>
@@ -129,11 +169,13 @@ function ContributorTable({ title, rows = [], tone = 'blue', L }) {
               <th className="py-1 px-2 text-right font-medium">{L('전기→당기', 'Base→Now')}</th>
               <th className="py-1 px-2 text-right font-medium">{L('원가율', 'Ratio')}</th>
               <th className="py-1 pl-2 text-right font-medium">{L('기여도', 'Share')}</th>
+              <th className="py-1 pl-2 text-right font-medium">{L('질문', 'Question')}</th>
             </tr>
           </thead>
           <tbody>
             {sortedRows.map((row) => {
-              const verdict = contributorVerdict(row, L);
+              const verdict = row.verdict;
+              const rowCopyId = `${copyScope}:${copyKind}:${row.name}`;
               return (
                 <tr key={row.name} className="border-b border-white/50 last:border-0">
                   <td className={`py-1 pr-2 font-semibold ${toneClass.name}`}>{row.name}</td>
@@ -156,9 +198,27 @@ function ContributorTable({ title, rows = [], tone = 'blue', L }) {
                   <td className="py-1 pl-2 text-right tabular-nums font-semibold text-slate-700">
                     {row.share != null ? `${row.share.toFixed(0)}%` : '-'}
                   </td>
+                  <td className="py-1 pl-2 text-right">
+                    {onCopyRow && (
+                      <button
+                        type="button"
+                        onClick={() => onCopyRow(row, verdict, copyKind, copyScope)}
+                        className="whitespace-nowrap rounded-full border border-white/80 bg-white/60 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-blue-300 hover:text-blue-600"
+                      >
+                        {copiedRowId === rowCopyId ? L('복사됨', 'Copied') : copiedRowId === `fail:${rowCopyId}` ? L('실패', 'Fail') : L('행 질문 복사', 'Copy row')}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
+            {sortedRows.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-2 text-center text-[11px] text-slate-400">
+                  {L('선택한 판정에 해당하는 대상이 없습니다.', 'No targets match the selected flag.')}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -401,6 +461,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const [checkFilter, setCheckFilter] = useState('all');
   const [thresholdOpen, setThresholdOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [copiedRowId, setCopiedRowId] = useState(null);
 
   useEffect(() => {
     localStorage.setItem(NOTE_PREFIX + noteKey, JSON.stringify(notes));
@@ -439,6 +500,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     ].filter(Boolean).join(' / ');
     return {
       id: `cost:${item.item}`,
+      item: item.item,
       title: L(`${cleanItem(item.item)} 증가 사유`, `${cleanItem(item.item)} increase`),
       evidence: L(
         `${money(item.prev)} → ${money(item.cur)}백만동, ${money(item.delta)}백만동 증가 (${signed(item.pct)}). 매출 대비 원가율은 ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)})이고, ${curAvgLabel} ${ratio(item.avgRatioCurYtd)} 대비 ${pp(item.avgDeltaPp)}입니다. ${item.structural ? '여러 달 반복되어 구조적 가능성이 있습니다.' : '특정 기간 집중 여부를 확인해야 합니다.'}`,
@@ -509,6 +571,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     ].filter(Boolean).join(' / ');
     return {
       id: `drop:${item.item}`,
+      item: item.item,
       urgent: true,
       title: `${cleanItem(item.item)} · ${dropType(item, L)}`,
       evidence: L(
@@ -575,7 +638,18 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       ),
     }] : []),
   ].slice(0, 10);
-  const visibleChecks = checkFilter === 'ratio' ? checks.filter((item) => item.id.startsWith('rate:')) : checks;
+  const checkFilterOptions = [
+    { id: 'all', label: L('전체 확인', 'All checks'), matcher: () => true },
+    { id: 'urgent', label: L('입력 점검', 'Input check'), matcher: (item) => item.urgent },
+    { id: 'ratio', label: L('원가율 이탈', 'Ratio gaps'), matcher: (item) => item.id.startsWith('rate:') },
+    { id: 'drop', label: L('급감·누락', 'Drops/omissions'), matcher: (item) => item.id.startsWith('drop:') || item.id.startsWith('data:') },
+    { id: 'cost', label: L('원가 증가', 'Cost increases'), matcher: (item) => item.id.startsWith('cost:') },
+  ].map((filter) => ({
+    ...filter,
+    count: checks.filter(filter.matcher).length,
+  }));
+  const activeCheckFilter = checkFilterOptions.find((filter) => filter.id === checkFilter) || checkFilterOptions[0];
+  const visibleChecks = checks.filter(activeCheckFilter.matcher);
   const confirmedChecks = checks.filter((item) => notes[item.id]?.trim());
   const visibleConfirmedChecks = visibleChecks.filter((item) => notes[item.id]?.trim());
   const updateItemThreshold = (key, value) => {
@@ -595,6 +669,10 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       return { ...current, itemThresholds: next };
     });
   };
+  const fallbackVerdictThreshold = (itemName) => {
+    if (typeof thresholdPp === 'number') return thresholdPp;
+    return costItemThresholdPp(itemName || '');
+  };
   const copyQuestion = async (item) => {
     const text = [
       `[${item.title}]`,
@@ -606,6 +684,27 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     const ok = await copyText(text);
     setCopiedId(ok ? item.id : `fail:${item.id}`);
     window.setTimeout(() => setCopiedId(null), 1800);
+  };
+  const copyContributorQuestion = async (item, row, verdict, kind, scope) => {
+    const kindLabel = kind === 'warehouse' ? L('창고', 'Warehouse') : L('고객사', 'Customer');
+    const text = [
+      `[${item.title}]`,
+      `${kindLabel}: ${row.name}`,
+      `${L('판정', 'Flag')}: ${verdict.label}`,
+      `${L('증감액', 'Delta')}: ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)})`,
+      row.ratioDeltaPp != null
+        ? `${L('원가율', 'Cost ratio')}: ${ratio(row.ratioPrev)}→${ratio(row.ratioCur)} (${pp(row.ratioDeltaPp)})`
+        : '',
+      row.share != null ? `${L('기여도', 'Share')}: ${row.share.toFixed(0)}%` : '',
+      `${L('확인 질문', 'Question')}: ${L(
+        `${row.name} 담당자에게 실제 물량·작업시간·단가·계약 조건·비용 배부·일회성/누락/이월 비용 중 어떤 요인인지 확인해 주세요. 수량 효과와 단가 효과를 나눠 설명 가능할까요?`,
+        `Ask the owner of ${row.name} to confirm whether this came from actual volume, work hours, rates, contract terms, cost allocation, one-off cost, omission, or deferred cost. Can they split the reason into quantity effect and rate effect?`,
+      )}`,
+    ].filter(Boolean).join('\n');
+    const rowId = `${scope}:${kind}:${row.name}`;
+    const ok = await copyText(text);
+    setCopiedRowId(ok ? rowId : `fail:${rowId}`);
+    window.setTimeout(() => setCopiedRowId(null), 1800);
   };
 
   return (
@@ -751,14 +850,12 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
               </span>
             </div>
             <div className="mb-2 flex flex-wrap items-center gap-1">
-              {[
-                { id: 'all', label: L('전체 확인', 'All checks'), count: checks.length },
-                { id: 'ratio', label: L('원가율 이탈만', 'Ratio gaps only'), count: rateChecks.length },
-              ].map((filter) => (
+              {checkFilterOptions.map((filter) => (
                 <button
                   key={filter.id}
                   type="button"
                   onClick={() => setCheckFilter(filter.id)}
+                  disabled={filter.count === 0}
                   className={`rounded-full border px-2 py-0.5 text-[10px] ${checkFilter === filter.id ? 'border-amber-500 bg-amber-50 text-amber-700 font-semibold' : 'border-slate-200 bg-white text-slate-500'}`}
                 >
                   {filter.label} {filter.count}
@@ -789,12 +886,22 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                       rows={item.warehouseRows || []}
                       tone="blue"
                       L={L}
+                      verdictThreshold={item.thresholdPp || fallbackVerdictThreshold(item.item)}
+                      onCopyRow={(row, verdict, kind, scope) => copyContributorQuestion(item, row, verdict, kind, scope)}
+                      copiedRowId={copiedRowId}
+                      copyKind="warehouse"
+                      copyScope={item.id}
                     />
                     <ContributorTable
                       title={L('어느 고객사', 'Customers')}
                       rows={item.customerRows || []}
                       tone="violet"
                       L={L}
+                      verdictThreshold={item.thresholdPp || fallbackVerdictThreshold(item.item)}
+                      onCopyRow={(row, verdict, kind, scope) => copyContributorQuestion(item, row, verdict, kind, scope)}
+                      copiedRowId={copiedRowId}
+                      copyKind="customer"
+                      copyScope={item.id}
                     />
                     {item.customerRows?.length > 0 && (
                       <p className="mt-1 text-[10px] text-violet-500">
