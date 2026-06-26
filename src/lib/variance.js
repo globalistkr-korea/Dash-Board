@@ -36,6 +36,8 @@ const recentMonths = (endMonth, count) => {
 };
 const ratioTrend = (costSeries, revSeries, months) => months.map((i) => ({
   month: i + 1,
+  cost: costSeries?.[i] || 0,
+  revenue: revSeries?.[i] || 0,
   ratio: ratioPct(costSeries?.[i] || 0, revSeries?.[i] || 0),
 }));
 const basisValue = (item, basis = 'curYtd') => {
@@ -44,6 +46,15 @@ const basisValue = (item, basis = 'curYtd') => {
   if (basis === 'recent5') return item.avgRatioRecent5;
   return item.avgRatioCurYtd;
 };
+export function costItemThresholdPp(item, fallback = 5) {
+  const name = String(item || '').replace(/^(\d+)\.\s*/, '').toUpperCase();
+  if (name.includes('OFFICE') || name.includes('SALARY') || name.includes('LABOR') || name.includes('WAGE') || name.includes('인건비')) return 1;
+  if (name.includes('RENTAL') || name.includes('RENT') || name.includes('WH')) return 3;
+  if (name.includes('HANDLING') || name.includes('LOADING') || name.includes('UNLOADING')) return 3;
+  if (name.includes('TRANSPORT') || name.includes('TRUCKING') || name.includes('DELIVERY')) return 5;
+  if (name.includes('OTHERS') || name.includes('OTHER') || name.includes('DIR')) return 5;
+  return fallback;
+}
 
 // 1) 진단
 export function marginDiagnosis(cmp, clff = '전체', region = '전체', subtype = '전체') {
@@ -228,12 +239,14 @@ export function costRatioOutliers(region = '전체', clff = '전체', biz = '전
     .map((item) => {
       const baselineRatio = basisValue(item, basis);
       const basisDeltaPp = item.ratioCur != null && baselineRatio != null ? item.ratioCur - baselineRatio : null;
+      const itemThresholdPp = thresholdPp === 'item' ? costItemThresholdPp(item.item) : thresholdPp;
       return {
         ...item,
         basis,
         baselineRatio,
         basisDeltaPp,
-        ratioOutlier: basisDeltaPp != null && Math.abs(basisDeltaPp) >= thresholdPp,
+        thresholdPp: itemThresholdPp,
+        ratioOutlier: basisDeltaPp != null && Math.abs(basisDeltaPp) >= itemThresholdPp,
       };
     })
     .filter((item) => item.ratioOutlier)

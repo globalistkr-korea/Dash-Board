@@ -6,6 +6,7 @@ import {
 import { useLang } from '../context/LangContext';
 
 const NOTE_PREFIX = 'vn_dashboard_report_notes_v1:';
+const SETTINGS_KEY = 'vn_dashboard_report_ratio_settings_v1';
 const cleanItem = (item) => item.replace(/^(\d+)\.\s*/, '');
 const signed = (value, digits = 1) => (
   value == null || !Number.isFinite(value)
@@ -23,7 +24,7 @@ const ratio = (value) => (
     ? '-'
     : `${value.toFixed(1)}%`
 );
-const THRESHOLDS = [3, 5, 10];
+const THRESHOLDS = ['item', 3, 5, 10];
 const baselineOptions = (throughMonth, L) => [
   { value: 'curYtd', label: L(`26년 1~${throughMonth}월 평균`, `2026 Jan-${throughMonth}M avg`) },
   { value: 'prevSame', label: L('25년 동일기간 평균', '2025 same-period avg') },
@@ -34,6 +35,9 @@ const baselineLabel = (basis, throughMonth, L) => (
   baselineOptions(throughMonth, L).find((option) => option.value === basis)?.label
   || baselineOptions(throughMonth, L)[0].label
 );
+const thresholdLabel = (value, L) => (
+  value === 'item' ? L('항목별 기준', 'By item') : `±${value}%p`
+);
 const contributionText = (rows, L, direction = 'increase') => rows.map((row) => {
   const shareLabel = direction === 'increase' ? L('증가 대상 내', 'share among increases') : L('감소 대상 내', 'share among decreases');
   const share = row.share != null ? `, ${shareLabel} ${row.share.toFixed(0)}%` : '';
@@ -41,7 +45,8 @@ const contributionText = (rows, L, direction = 'increase') => rows.map((row) => 
   return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
 }).join(' · ');
 
-function MiniRatioChart({ rows = [], baseline, thresholdPp, L }) {
+function MiniRatioChart({ rows = [], baseline, thresholdPp, item, L }) {
+  const [detailOpen, setDetailOpen] = useState(false);
   const values = rows.map((row) => row.ratio).filter((value) => value != null && Number.isFinite(value));
   if (values.length === 0 || baseline == null || !Number.isFinite(baseline)) return null;
   const minValue = Math.min(...values, baseline - thresholdPp);
@@ -64,9 +69,19 @@ function MiniRatioChart({ rows = [], baseline, thresholdPp, L }) {
     <div className="mt-1.5 rounded-md bg-slate-50 px-2 py-1.5">
       <div className="flex items-center justify-between text-[10px] text-slate-500">
         <span>{L('최근 원가율 추이', 'Recent cost-ratio trend')}</span>
-        <span>{L('기준', 'base')} {ratio(baseline)} · ±{thresholdPp}%p</span>
+        <button
+          type="button"
+          onClick={() => setDetailOpen(true)}
+          className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600 hover:border-orange-300 hover:text-orange-600"
+        >
+          {L('월별 상세 보기', 'Monthly detail')}
+        </button>
       </div>
-      <div className="flex items-end gap-2">
+      <button
+        type="button"
+        onClick={() => setDetailOpen(true)}
+        className="mt-1 flex w-full items-end gap-2 text-left"
+      >
         <svg viewBox="0 0 120 52" className="h-12 flex-1" aria-label={L('최근 원가율 미니 차트', 'Recent cost-ratio mini chart')}>
           <line x1="6" x2="114" y1={upperY} y2={upperY} stroke="#fecaca" strokeWidth="1" strokeDasharray="3 3" />
           <line x1="6" x2="114" y1={baselineY} y2={baselineY} stroke="#cbd5e1" strokeWidth="1.2" strokeDasharray="4 3" />
@@ -83,7 +98,60 @@ function MiniRatioChart({ rows = [], baseline, thresholdPp, L }) {
           <div>{L('상한', 'upper')} {ratio(baseline + thresholdPp)}</div>
           <div>{L('하한', 'lower')} {ratio(baseline - thresholdPp)}</div>
         </div>
-      </div>
+      </button>
+      {detailOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/35 p-3 sm:items-center">
+          <div className="max-h-[85vh] w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+              <div>
+                <div className="text-sm font-bold text-slate-800">{cleanItem(item)} {L('월별 원가율 상세', 'monthly cost-ratio detail')}</div>
+                <div className="text-[11px] text-slate-500">
+                  {L('기준', 'base')} {ratio(baseline)} · {L('임계값', 'threshold')} ±{thresholdPp}%p
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailOpen(false)}
+                className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600"
+              >
+                {L('닫기', 'Close')}
+              </button>
+            </div>
+            <div className="overflow-auto p-3">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400">
+                    <th className="py-1 text-left font-medium">{L('월', 'Month')}</th>
+                    <th className="py-1 text-right font-medium">{L('매출', 'Revenue')}</th>
+                    <th className="py-1 text-right font-medium">{L('원가', 'Cost')}</th>
+                    <th className="py-1 text-right font-medium">{L('원가율', 'Ratio')}</th>
+                    <th className="py-1 text-right font-medium">{L('기준差', 'vs Base')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const gap = row.ratio != null ? row.ratio - baseline : null;
+                    return (
+                      <tr key={row.month} className="border-b border-slate-50">
+                        <td className="py-1 text-slate-600">{row.month}{L('월', 'M')}</td>
+                        <td className="py-1 text-right tabular-nums text-slate-500">{money(row.revenue)}</td>
+                        <td className="py-1 text-right tabular-nums text-slate-700">{money(row.cost)}</td>
+                        <td className="py-1 text-right tabular-nums font-semibold text-slate-700">{ratio(row.ratio)}</td>
+                        <td className={`py-1 text-right tabular-nums ${gap == null ? 'text-slate-400' : Math.abs(gap) >= thresholdPp ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
+                          {pp(gap)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
+                {L('※ 금액은 운영 데이터 기준 백만동입니다. 원가율은 원가÷매출로 계산됩니다.', '※ Amounts are ops data in M dong. Cost ratio = cost ÷ revenue.')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -106,6 +174,18 @@ function loadNotes(key) {
     return JSON.parse(localStorage.getItem(NOTE_PREFIX + key) || '{}');
   } catch {
     return {};
+  }
+}
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return {
+      baseline: ['curYtd', 'prevSame', 'recent3', 'recent5'].includes(saved.baseline) ? saved.baseline : 'curYtd',
+      thresholdPp: saved.thresholdPp === 'item' || [3, 5, 10].includes(saved.thresholdPp) ? saved.thresholdPp : 'item',
+    };
+  } catch {
+    return { baseline: 'curYtd', thresholdPp: 'item' };
   }
 }
 
@@ -135,8 +215,9 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const throughMonth = Math.max(...cmp.cm.map((i) => i + 1));
   const curAvgLabel = L(`26년 1~${throughMonth}월 평균`, `2026 Jan-${throughMonth}M avg`);
   const prevAvgLabel = L(`25년 동일기간 평균`, `2025 same-period avg`);
-  const [baseline, setBaseline] = useState('curYtd');
-  const [thresholdPp, setThresholdPp] = useState(5);
+  const [settings, setSettings] = useState(loadSettings);
+  const baseline = settings.baseline;
+  const thresholdPp = settings.thresholdPp;
   const selectedBaselineLabel = baselineLabel(baseline, throughMonth, L);
   const diagnosis = useMemo(
     () => marginDiagnosis(cmp, clff, region, subtype),
@@ -175,6 +256,10 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   useEffect(() => {
     localStorage.setItem(NOTE_PREFIX + noteKey, JSON.stringify(notes));
   }, [noteKey, notes]);
+
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [settings]);
 
   const increases = costs.filter((item) => item.delta > 0);
   const decreases = costs
@@ -230,15 +315,16 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     ].filter(Boolean).join(' / ');
     return {
       id: `rate:${item.item}`,
-      urgent: Math.abs(item.basisDeltaPp || 0) >= thresholdPp,
+      urgent: Math.abs(item.basisDeltaPp || 0) >= item.thresholdPp,
       title: L(`${cleanItem(item.item)} 원가율 이탈`, `${cleanItem(item.item)} cost-ratio deviation`),
       evidence: L(
-        `금액은 ${money(item.prev)} → ${money(item.cur)}백만동(${item.delta >= 0 ? '+' : ''}${money(item.delta)})이고, 매출 대비 원가율은 ${ratio(item.ratioCur)}입니다. 선택 기준선 ${selectedBaselineLabel} ${ratio(item.baselineRatio)} 대비 ${pp(item.basisDeltaPp)}로, 임계값 ${thresholdPp}%p를 벗어났습니다. 참고로 ${curAvgLabel} 대비 ${pp(item.avgDeltaPp)}, ${prevAvgLabel} 대비 ${pp(item.prevAvgDeltaPp)}입니다.`,
-        `Amount moved ${money(item.prev)} → ${money(item.cur)} M dong (${item.delta >= 0 ? '+' : ''}${money(item.delta)}), and the cost ratio is ${ratio(item.ratioCur)}. It is ${pp(item.basisDeltaPp)} vs the selected baseline ${selectedBaselineLabel} ${ratio(item.baselineRatio)}, beyond the ${thresholdPp}pp threshold. For reference: ${pp(item.avgDeltaPp)} vs 2026 YTD and ${pp(item.prevAvgDeltaPp)} vs 2025 same-period.`,
+        `금액은 ${money(item.prev)} → ${money(item.cur)}백만동(${item.delta >= 0 ? '+' : ''}${money(item.delta)})이고, 매출 대비 원가율은 ${ratio(item.ratioCur)}입니다. 선택 기준선 ${selectedBaselineLabel} ${ratio(item.baselineRatio)} 대비 ${pp(item.basisDeltaPp)}로, 임계값 ${item.thresholdPp}%p를 벗어났습니다. 참고로 ${curAvgLabel} 대비 ${pp(item.avgDeltaPp)}, ${prevAvgLabel} 대비 ${pp(item.prevAvgDeltaPp)}입니다.`,
+        `Amount moved ${money(item.prev)} → ${money(item.cur)} M dong (${item.delta >= 0 ? '+' : ''}${money(item.delta)}), and the cost ratio is ${ratio(item.ratioCur)}. It is ${pp(item.basisDeltaPp)} vs the selected baseline ${selectedBaselineLabel} ${ratio(item.baselineRatio)}, beyond the ${item.thresholdPp}pp threshold. For reference: ${pp(item.avgDeltaPp)} vs 2026 YTD and ${pp(item.prevAvgDeltaPp)} vs 2025 same-period.`,
       ),
       chartRows: baseline === 'recent3' ? item.ratioTrend3 : item.ratioTrend5,
       baselineRatio: item.baselineRatio,
-      thresholdPp,
+      thresholdPp: item.thresholdPp,
+      item: item.item,
       warehouseDetail: warehouseDrivers.length
         ? contributionText(warehouseDrivers, L, direction)
         : L('원가율 이탈 창고 특정 불가', 'No warehouse ratio driver identified'),
@@ -365,7 +451,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   <button
                     key={option.value}
                     type="button"
-                    onClick={() => setBaseline(option.value)}
+                    onClick={() => setSettings((current) => ({ ...current, baseline: option.value }))}
                     className={`rounded-full px-2 py-0.5 text-[10px] border ${baseline === option.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-slate-200 bg-white text-slate-500'}`}
                   >
                     {option.label}
@@ -378,14 +464,14 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setThresholdPp(value)}
+                    onClick={() => setSettings((current) => ({ ...current, thresholdPp: value }))}
                     className={`rounded-full px-2 py-0.5 text-[10px] border ${thresholdPp === value ? 'border-rose-500 bg-rose-50 text-rose-700 font-semibold' : 'border-slate-200 bg-white text-slate-500'}`}
                   >
-                    ±{value}%p
+                    {thresholdLabel(value, L)}
                   </button>
                 ))}
                 <span className="text-[10px] text-slate-400">
-                  {L('기본 5%p · 선택 즉시 아래 확인 대상이 갱신됩니다.', 'Default 5pp · changing it updates the checks below.')}
+                  {L('기본은 항목별 기준 · 선택값은 자동 저장됩니다.', 'Default is by item · selection is saved automatically.')}
                 </span>
               </div>
             </div>
@@ -463,6 +549,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                         rows={item.chartRows}
                         baseline={item.baselineRatio}
                         thresholdPp={item.thresholdPp}
+                        item={item.item}
                         L={L}
                       />
                     )}
