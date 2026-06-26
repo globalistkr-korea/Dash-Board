@@ -45,6 +45,53 @@ const contributionText = (rows, L, direction = 'increase') => rows.map((row) => 
   return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
 }).join(' · ');
 
+function ContributorTable({ title, rows = [], tone = 'blue', L }) {
+  if (!rows.length) return null;
+  const toneClass = tone === 'violet'
+    ? { wrap: 'bg-violet-50/80 text-violet-950', head: 'text-violet-500', name: 'text-violet-900' }
+    : { wrap: 'bg-blue-50/80 text-blue-950', head: 'text-blue-500', name: 'text-blue-900' };
+
+  return (
+    <div className={`mt-1 rounded ${toneClass.wrap} p-2`}>
+      <div className="mb-1 text-[11px] font-bold">{title}</div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-[11px]">
+          <thead>
+            <tr className={`border-b border-white/70 ${toneClass.head}`}>
+              <th className="py-1 pr-2 text-left font-medium">{L('대상', 'Target')}</th>
+              <th className="py-1 px-2 text-right font-medium">{L('증감액', 'Δ')}</th>
+              <th className="py-1 px-2 text-right font-medium">{L('전기→당기', 'Base→Now')}</th>
+              <th className="py-1 px-2 text-right font-medium">{L('원가율', 'Ratio')}</th>
+              <th className="py-1 pl-2 text-right font-medium">{L('기여도', 'Share')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.name} className="border-b border-white/50 last:border-0">
+                <td className={`py-1 pr-2 font-semibold ${toneClass.name}`}>{row.name}</td>
+                <td className={`py-1 px-2 text-right tabular-nums font-semibold ${row.delta >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                  {row.delta >= 0 ? '+' : ''}{money(row.delta)}
+                </td>
+                <td className="py-1 px-2 text-right tabular-nums text-slate-600">
+                  {money(row.prev)}→{money(row.cur)}
+                </td>
+                <td className="py-1 px-2 text-right tabular-nums text-slate-600">
+                  {row.ratioDeltaPp != null
+                    ? `${ratio(row.ratioPrev)}→${ratio(row.ratioCur)} (${pp(row.ratioDeltaPp)})`
+                    : '-'}
+                </td>
+                <td className="py-1 pl-2 text-right tabular-nums font-semibold text-slate-700">
+                  {row.share != null ? `${row.share.toFixed(0)}%` : '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 async function copyText(text) {
   if (navigator.clipboard?.writeText) {
     try {
@@ -329,6 +376,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       customerDetail: customerDrivers.length
         ? contributionText(customerDrivers, L)
         : L('고객사 배부 데이터에서 증가 대상 특정 불가', 'No customer driver identified in allocated data'),
+      warehouseRows: warehouseDrivers,
+      customerRows: customerDrivers,
       question: L(
         target
           ? `${target} 담당자에게 물량·작업시간·적용 단가가 얼마나 변했는지, 신규 작업·일회성 비용·회계 재분류가 있었는지 확인해 주세요. 특히 매출 대비 원가율이 평균에서 벗어난 이유를 수량 효과와 단가 효과로 나눌 수 있나요?`
@@ -367,6 +416,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       customerDetail: customerDrivers.length
         ? contributionText(customerDrivers, L, direction)
         : L('고객사 배부 데이터에서 원가율 이탈 대상 특정 불가', 'No customer ratio driver identified in allocated data'),
+      warehouseRows: warehouseDrivers,
+      customerRows: customerDrivers,
       question: L(
         `${targets || '해당 원가 담당자'}에게 ① 매출 구성/물량 믹스가 바뀌었는지 ② 단가·계약 조건이 바뀌었는지 ③ 고정비가 매출 감소로 희석되지 않았는지 ④ 비용 배부 기준 또는 계정 분류가 바뀌었는지 ⑤ 일회성/누락/이월 비용인지 확인해 주세요.`,
         `Ask ${targets || 'the cost owner'} to verify: ① revenue mix/volume change, ② rate or contract change, ③ fixed-cost absorption due to lower revenue, ④ allocation/account changes, and ⑤ one-off/omitted/deferred cost.`,
@@ -396,6 +447,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       customerDetail: customerDrivers.length
         ? contributionText(customerDrivers, L, 'decrease')
         : L('고객사 배부 데이터에서 감소 대상 특정 불가', 'No customer drop identified in allocated data'),
+      warehouseRows: warehouseDrivers,
+      customerRows: customerDrivers,
       question: L(
         `${targets || '해당 원가 담당자'}에게 ① 원본 전표·시트가 실제 ${money(item.cur)}백만동인지 ② 0 또는 소수점·자릿수 오입력인지 ③ 비용 누락·익월 이월인지 ④ 다른 계정으로 재분류됐는지 ⑤ 실제 물량·작업시간 감소인지 확인해 주세요.`,
         `Ask ${targets || 'the cost owner'} to verify: ① source voucher/sheet value ${money(item.cur)} M dong, ② zero/decimal/digit error, ③ omitted or deferred cost, ④ account reclassification, and ⑤ actual volume/work-hour decline.`,
@@ -657,18 +710,22 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                       </button>
                     </div>
                     <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{item.evidence}</p>
-                    {item.warehouseDetail && (
-                      <div className="mt-1 rounded bg-blue-50/80 px-2 py-1 text-[11px] leading-relaxed text-blue-900">
-                        <b>{L('어디 창고', 'Warehouses')}:</b> {item.warehouseDetail}
-                      </div>
-                    )}
-                    {item.customerDetail && (
-                      <div className="mt-1 rounded bg-violet-50/80 px-2 py-1 text-[11px] leading-relaxed text-violet-900">
-                        <b>{L('어느 고객사', 'Customers')}:</b> {item.customerDetail}
-                        <span className="block text-[10px] text-violet-500">
-                          {L('※ 고객사 원가는 운영 배부 기준 참고치이며 창고 합계와 다를 수 있습니다.', '※ Customer costs are allocated operational figures and may differ from warehouse totals.')}
-                        </span>
-                      </div>
+                    <ContributorTable
+                      title={L('어디 창고', 'Warehouses')}
+                      rows={item.warehouseRows || []}
+                      tone="blue"
+                      L={L}
+                    />
+                    <ContributorTable
+                      title={L('어느 고객사', 'Customers')}
+                      rows={item.customerRows || []}
+                      tone="violet"
+                      L={L}
+                    />
+                    {item.customerRows?.length > 0 && (
+                      <p className="mt-1 text-[10px] text-violet-500">
+                        {L('※ 고객사 원가는 운영 배부 기준 참고치이며 창고 합계와 다를 수 있습니다.', '※ Customer costs are allocated operational figures and may differ from warehouse totals.')}
+                      </p>
                     )}
                     {item.chartRows && (
                       <MiniRatioChart
