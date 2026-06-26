@@ -5,6 +5,7 @@ import {
 } from '../lib/variance';
 import {
   isAllowedReportUser,
+  loadAllowedReportEmails,
   loadCloudStatus,
   loadReportNotesFromCloud,
   loadReportNotesHistoryFromCloud,
@@ -439,6 +440,8 @@ function loadNotesHistory(currentKey) {
           confirmed,
           label: `${cy || '-'}년 ${cm || '-'}월 · ${region || '-'} · ${clff || '-'} · ${subtype || '-'}`,
           compare: `${by || '-'}년 ${bm || '-'}월 대비`,
+          source: 'local',
+          notes: value,
         };
       })
       .filter((item) => item.confirmed > 0)
@@ -536,7 +539,9 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const [cloudUser, setCloudUser] = useState(null);
   const [authError, setAuthError] = useState('');
   const [cloudHistory, setCloudHistory] = useState([]);
-  const canUseCloudNotes = isAllowedReportUser(cloudUser);
+  const [allowedEmails, setAllowedEmails] = useState(['globalistkr@gmail.com']);
+  const [expandedHistoryKey, setExpandedHistoryKey] = useState('');
+  const canUseCloudNotes = isAllowedReportUser(cloudUser, allowedEmails);
 
   useEffect(() => {
     if (activeNoteKey !== noteKey) return undefined;
@@ -614,6 +619,20 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    if (!cloudUser?.uid) return () => {
+      alive = false;
+    };
+    loadAllowedReportEmails().then((emails) => {
+      if (!alive) return;
+      setAllowedEmails(emails);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [cloudUser?.uid]);
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -1328,17 +1347,41 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
               </div>
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {notesHistory.map((item) => (
-                  <div key={item.noteKey} className={`rounded-md border px-2 py-1.5 ${item.current ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.current ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {item.current ? L('현재 조건', 'Current') : L('저장됨', 'Saved')}
-                      </span>
-                      <b className="min-w-0 flex-1 truncate text-[11px] text-slate-700">{item.label}</b>
-                    </div>
-                    <p className="mt-0.5 text-[10px] text-slate-400">
-                      {item.compare} · {item.confirmed}{L('개 사유 저장', ' saved notes')}
-                      {item.updatedAtLocal ? ` · ${new Date(item.updatedAtLocal).toLocaleDateString('ko-KR')}` : ''}
-                    </p>
+                  <div key={item.noteKey} className={`rounded-md border ${item.current ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedHistoryKey((current) => (current === item.noteKey ? '' : item.noteKey))}
+                      className="w-full px-2 py-1.5 text-left"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.current ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {item.current ? L('현재 조건', 'Current') : L('저장됨', 'Saved')}
+                        </span>
+                        <b className="min-w-0 flex-1 truncate text-[11px] text-slate-700">{item.label}</b>
+                        <span className="text-[10px] text-slate-400">
+                          {expandedHistoryKey === item.noteKey ? L('접기', 'Hide') : L('보기', 'View')}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-slate-400">
+                        {item.compare} · {item.confirmed}{L('개 사유 저장', ' saved notes')}
+                        {item.updatedAtLocal ? ` · ${new Date(item.updatedAtLocal).toLocaleDateString('ko-KR')}` : ''}
+                      </p>
+                    </button>
+                    {expandedHistoryKey === item.noteKey && (
+                      <div className="border-t border-white/80 px-2 py-1.5">
+                        <ul className="space-y-1">
+                          {Object.entries(item.notes || {})
+                            .filter(([, value]) => String(value || '').trim())
+                            .map(([key, value]) => (
+                              <li key={key} className="rounded bg-white/70 px-2 py-1 text-[10px] leading-relaxed text-slate-600">
+                                <b className="text-slate-700">{cleanItem(key.split(':').slice(1).join(':') || key)}</b>
+                                <span className="text-slate-400"> · </span>
+                                {String(value).trim()}
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

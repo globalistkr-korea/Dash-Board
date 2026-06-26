@@ -1,6 +1,6 @@
 const DEVICE_KEY = 'vn_dashboard_report_notes_device_v1';
 const CLOUD_PREFIX = 'vn_dashboard_report_notes_cloud_v1:';
-const ALLOWED_EMAILS = ['globalistkr@gmail.com'];
+export const DEFAULT_ALLOWED_REPORT_EMAILS = ['globalistkr@gmail.com'];
 
 function safeId(value) {
   return encodeURIComponent(value).replace(/\./g, '%2E');
@@ -18,8 +18,8 @@ export function deviceId() {
   }
 }
 
-export function isAllowedReportUser(user) {
-  return Boolean(user?.email && ALLOWED_EMAILS.includes(user.email));
+export function isAllowedReportUser(user, allowedEmails = DEFAULT_ALLOWED_REPORT_EMAILS) {
+  return Boolean(user?.email && allowedEmails.includes(user.email));
 }
 
 async function currentCloudUser() {
@@ -34,7 +34,6 @@ async function cloudDocRef(noteKey) {
   ]);
   const user = await currentCloudUser();
   if (!user?.uid) throw new Error('Cloud notes require Google sign-in.');
-  if (!isAllowedReportUser(user)) throw new Error('This Google account is not allowed to save report notes.');
   return doc(db, 'reportBriefingNotes', user.uid, 'items', safeId(noteKey));
 }
 
@@ -50,7 +49,25 @@ function parseNoteHistoryDoc(data, currentKey) {
     compare: `${by || '-'}년 ${bm || '-'}월 대비`,
     updatedAtLocal: data?.updatedAtLocal || '',
     source: 'cloud',
+    notes,
   };
+}
+
+export async function loadAllowedReportEmails() {
+  try {
+    const [{ doc, getDoc }, { db }] = await Promise.all([
+      import('firebase/firestore'),
+      import('./firebase'),
+    ]);
+    const snap = await getDoc(doc(db, 'appConfig', 'reportNotes'));
+    const emails = snap.data()?.allowedEmails;
+    return Array.isArray(emails) && emails.length > 0
+      ? emails.filter((email) => typeof email === 'string')
+      : DEFAULT_ALLOWED_REPORT_EMAILS;
+  } catch (error) {
+    console.warn('Allowed report email config load failed; using default list.', error);
+    return DEFAULT_ALLOWED_REPORT_EMAILS;
+  }
 }
 
 export function loadCloudStatus(noteKey) {
@@ -116,7 +133,7 @@ export async function saveReportNotesToCloud(noteKey, notes) {
 export async function loadReportNotesHistoryFromCloud(currentKey) {
   try {
     const user = await currentCloudUser();
-    if (!user?.uid || !isAllowedReportUser(user)) return [];
+    if (!user?.uid) return [];
     const [{ collection, getDocs, limit, orderBy, query }, { db }] = await Promise.all([
       import('firebase/firestore'),
       import('./firebase'),
