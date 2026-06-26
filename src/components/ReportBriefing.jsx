@@ -4,7 +4,11 @@ import {
   costDataQualityAlerts, costRatioOutliers, subtypeToBiz, costItemThresholdPp,
 } from '../lib/variance';
 import {
-  loadCloudStatus, loadReportNotesFromCloud, saveReportNotesToCloud,
+  isAllowedReportUser,
+  loadCloudStatus,
+  loadReportNotesFromCloud,
+  loadReportNotesHistoryFromCloud,
+  saveReportNotesToCloud,
 } from '../lib/reportNotesStore';
 import { useLang } from '../context/LangContext';
 
@@ -531,11 +535,13 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const [activeNoteKey, setActiveNoteKey] = useState(noteKey);
   const [cloudUser, setCloudUser] = useState(null);
   const [authError, setAuthError] = useState('');
+  const [cloudHistory, setCloudHistory] = useState([]);
+  const canUseCloudNotes = isAllowedReportUser(cloudUser);
 
   useEffect(() => {
     if (activeNoteKey !== noteKey) return undefined;
     localStorage.setItem(NOTE_PREFIX + noteKey, JSON.stringify(notes));
-    if (!cloudUser?.uid) {
+    if (!cloudUser?.uid || !canUseCloudNotes) {
       const statusTimer = window.setTimeout(() => setCloudStatus('local'), 0);
       return () => window.clearTimeout(statusTimer);
     }
@@ -544,7 +550,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       setCloudStatus(ok ? 'synced' : 'local');
     }, 700);
     return () => window.clearTimeout(saveTimer);
-  }, [activeNoteKey, cloudUser?.uid, noteKey, notes]);
+  }, [activeNoteKey, canUseCloudNotes, cloudUser?.uid, noteKey, notes]);
 
   useEffect(() => {
     let alive = true;
@@ -554,7 +560,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       setNotes(localNotes);
       setActiveNoteKey(noteKey);
       setCloudStatus(loadCloudStatus(noteKey));
-      if (!cloudUser?.uid) return;
+      if (!cloudUser?.uid || !canUseCloudNotes) return;
       const cloudNotes = await loadReportNotesFromCloud(noteKey);
       if (!alive || !cloudNotes) return;
       setNotes((current) => ({ ...current, ...cloudNotes }));
@@ -564,7 +570,27 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       alive = false;
       window.clearTimeout(loadTimer);
     };
-  }, [cloudUser?.uid, noteKey]);
+  }, [canUseCloudNotes, cloudUser?.uid, noteKey]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!cloudUser?.uid || !canUseCloudNotes) {
+      const clearTimer = window.setTimeout(() => {
+        if (alive) setCloudHistory([]);
+      }, 0);
+      return () => {
+        alive = false;
+        window.clearTimeout(clearTimer);
+      };
+    }
+    loadReportNotesHistoryFromCloud(noteKey).then((history) => {
+      if (!alive) return;
+      setCloudHistory(history);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canUseCloudNotes, cloudUser?.uid, noteKey, notes]);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -785,7 +811,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       return b.priority.score - a.priority.score;
     })
     .slice(0, 5);
-  const notesHistory = loadNotesHistory(noteKey);
+  const localNotesHistory = loadNotesHistory(noteKey);
+  const notesHistory = cloudHistory.length > 0 ? cloudHistory : localNotesHistory;
   const cloudStatusInfo = {
     synced: {
       label: L('클라우드 저장됨', 'Cloud saved'),
@@ -1154,7 +1181,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                 </span>
                 {cloudUser?.email ? (
                   <>
-                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${canUseCloudNotes ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                       {cloudUser.email}
                     </span>
                     <button
@@ -1175,9 +1202,16 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   </button>
                 )}
                 <p className="text-[10px] text-slate-400">
-                  {L('확인 사유는 현재 조건별로 자동 저장되어 같은 월·지역·구분으로 다시 열면 다시 확인할 수 있습니다.', 'Confirmed reasons are saved by the current period/region/category and can be reviewed again when reopened with the same conditions.')}
+                  {canUseCloudNotes
+                    ? L('확인 사유는 클라우드와 기기에 함께 저장되어 같은 월·지역·구분으로 다시 확인할 수 있습니다.', 'Confirmed reasons are saved to cloud and this device by period/region/category.')
+                    : L('확인 사유는 기기에 자동 저장됩니다. 클라우드 저장은 허용된 Google 계정에서만 가능합니다.', 'Confirmed reasons are saved on this device. Cloud save is available only for allowed Google accounts.')}
                 </p>
               </div>
+              {cloudUser?.email && !canUseCloudNotes && (
+                <p className="mt-1 rounded bg-rose-50 px-2 py-1 text-[10px] text-rose-600">
+                  {L('현재 계정은 보고 메모 클라우드 저장 허용 목록에 없습니다.', 'This account is not in the allowed list for cloud report notes.')}
+                </p>
+              )}
               {authError && (
                 <p className="mt-1 rounded bg-rose-50 px-2 py-1 text-[10px] text-rose-600">
                   {L('로그인/클라우드 저장 설정 확인 필요: ', 'Login/cloud setup check needed: ')}{authError}
@@ -1288,6 +1322,9 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
             <div className="rounded-md border border-slate-200 bg-white/70 p-2.5">
               <div className="mb-1 text-[11px] font-semibold text-slate-600">
                 {L('6. 저장된 확인 사유 히스토리', '6. Saved confirmation history')}
+                <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                  {cloudHistory.length > 0 ? L('클라우드 기준', 'Cloud') : L('기기 기준', 'Local')}
+                </span>
               </div>
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {notesHistory.map((item) => (
@@ -1300,6 +1337,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                     </div>
                     <p className="mt-0.5 text-[10px] text-slate-400">
                       {item.compare} · {item.confirmed}{L('개 사유 저장', ' saved notes')}
+                      {item.updatedAtLocal ? ` · ${new Date(item.updatedAtLocal).toLocaleDateString('ko-KR')}` : ''}
                     </p>
                   </div>
                 ))}

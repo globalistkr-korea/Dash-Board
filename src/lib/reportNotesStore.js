@@ -1,5 +1,6 @@
 const DEVICE_KEY = 'vn_dashboard_report_notes_device_v1';
 const CLOUD_PREFIX = 'vn_dashboard_report_notes_cloud_v1:';
+const ALLOWED_EMAILS = ['globalistkr@gmail.com'];
 
 function safeId(value) {
   return encodeURIComponent(value).replace(/\./g, '%2E');
@@ -17,6 +18,10 @@ export function deviceId() {
   }
 }
 
+export function isAllowedReportUser(user) {
+  return Boolean(user?.email && ALLOWED_EMAILS.includes(user.email));
+}
+
 async function currentCloudUser() {
   const { auth } = await import('./firebase');
   return auth.currentUser;
@@ -29,7 +34,23 @@ async function cloudDocRef(noteKey) {
   ]);
   const user = await currentCloudUser();
   if (!user?.uid) throw new Error('Cloud notes require Google sign-in.');
+  if (!isAllowedReportUser(user)) throw new Error('This Google account is not allowed to save report notes.');
   return doc(db, 'reportBriefingNotes', user.uid, 'items', safeId(noteKey));
+}
+
+function parseNoteHistoryDoc(data, currentKey) {
+  const notes = data?.notes || {};
+  const confirmed = Object.values(notes).filter((note) => String(note || '').trim()).length;
+  const [by, bm, cy, cm, region, clff, subtype] = String(data?.noteKey || '').split(':');
+  return {
+    noteKey: data?.noteKey || '',
+    current: data?.noteKey === currentKey,
+    confirmed,
+    label: `${cy || '-'}년 ${cm || '-'}월 · ${region || '-'} · ${clff || '-'} · ${subtype || '-'}`,
+    compare: `${by || '-'}년 ${bm || '-'}월 대비`,
+    updatedAtLocal: data?.updatedAtLocal || '',
+    source: 'cloud',
+  };
 }
 
 export function loadCloudStatus(noteKey) {
@@ -79,6 +100,7 @@ export async function saveReportNotesToCloud(noteKey, notes) {
       noteKey,
       lastDeviceId: deviceId(),
       ownerUid: (await currentCloudUser())?.uid || null,
+      ownerEmail: (await currentCloudUser())?.email || null,
       updatedAt: serverTimestamp(),
       updatedAtLocal: new Date().toISOString(),
     }, { merge: true });
@@ -88,5 +110,28 @@ export async function saveReportNotesToCloud(noteKey, notes) {
     saveCloudStatus(noteKey, 'local');
     console.warn('Report notes cloud save failed; keeping local notes.', error);
     return false;
+  }
+}
+
+export async function loadReportNotesHistoryFromCloud(currentKey) {
+  try {
+    const user = await currentCloudUser();
+    if (!user?.uid || !isAllowedReportUser(user)) return [];
+    const [{ collection, getDocs, limit, orderBy, query }, { db }] = await Promise.all([
+      import('firebase/firestore'),
+      import('./firebase'),
+    ]);
+    const historyQuery = query(
+      collection(db, 'reportBriefingNotes', user.uid, 'items'),
+      orderBy('updatedAtLocal', 'desc'),
+      limit(20),
+    );
+    const snap = await getDocs(historyQuery);
+    return snap.docs
+      .map((docSnap) => parseNoteHistoryDoc(docSnap.data(), currentKey))
+      .filter((item) => item.confirmed > 0);
+  } catch (error) {
+    console.warn('Report notes cloud history load failed; using local history.', error);
+    return [];
   }
 }
