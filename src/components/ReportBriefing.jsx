@@ -373,6 +373,42 @@ function alertType(alert, L) {
   return L('70% 이상 급감', 'Drop of 70% or more');
 }
 
+function checkPriority(item, L) {
+  if (item.urgent && item.id.startsWith('data:')) {
+    return {
+      score: 100,
+      label: L('입력값 우선 점검', 'Input check first'),
+      className: 'bg-rose-100 text-rose-700',
+    };
+  }
+  if (item.urgent && item.id.startsWith('drop:')) {
+    return {
+      score: 90,
+      label: L('급감·누락 확인', 'Drop/omission check'),
+      className: 'bg-rose-100 text-rose-700',
+    };
+  }
+  if (item.id.startsWith('rate:')) {
+    return {
+      score: 80,
+      label: L('원가율 이탈', 'Ratio deviation'),
+      className: 'bg-amber-100 text-amber-700',
+    };
+  }
+  if (item.id.startsWith('cost:')) {
+    return {
+      score: 70,
+      label: L('금액 영향 큼', 'Large amount impact'),
+      className: 'bg-blue-100 text-blue-700',
+    };
+  }
+  return {
+    score: 50,
+    label: L('이익 영향 확인', 'Profit impact check'),
+    className: 'bg-slate-100 text-slate-600',
+  };
+}
+
 function loadNotes(key) {
   try {
     return JSON.parse(localStorage.getItem(NOTE_PREFIX + key) || '{}');
@@ -462,6 +498,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const [thresholdOpen, setThresholdOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [copiedRowId, setCopiedRowId] = useState(null);
+  const [copyMode, setCopyMode] = useState('owner');
 
   useEffect(() => {
     localStorage.setItem(NOTE_PREFIX + noteKey, JSON.stringify(notes));
@@ -652,6 +689,17 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const visibleChecks = checks.filter(activeCheckFilter.matcher);
   const confirmedChecks = checks.filter((item) => notes[item.id]?.trim());
   const visibleConfirmedChecks = visibleChecks.filter((item) => notes[item.id]?.trim());
+  const priorityChecks = checks
+    .map((item) => ({
+      ...item,
+      priority: checkPriority(item, L),
+      confirmed: Boolean(notes[item.id]?.trim()),
+    }))
+    .sort((a, b) => {
+      if (a.confirmed !== b.confirmed) return a.confirmed ? 1 : -1;
+      return b.priority.score - a.priority.score;
+    })
+    .slice(0, 5);
   const updateItemThreshold = (key, value) => {
     const parsed = Number(value);
     setSettings((current) => ({
@@ -674,21 +722,29 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     return costItemThresholdPp(itemName || '');
   };
   const copyQuestion = async (item) => {
-    const text = [
-      `[${item.title}]`,
-      item.evidence,
-      item.warehouseDetail ? `어디 창고: ${item.warehouseDetail}` : '',
-      item.customerDetail ? `어느 고객사: ${item.customerDetail}` : '',
-      `확인 질문: ${item.question}`,
-    ].filter(Boolean).join('\n');
+    const text = copyMode === 'owner'
+      ? [
+        `[확인 요청] ${item.title}`,
+        item.evidence,
+        item.warehouseDetail ? `관련 창고: ${item.warehouseDetail}` : '',
+        item.customerDetail ? `관련 고객사: ${item.customerDetail}` : '',
+        `확인 부탁드립니다: ${item.question}`,
+        '확인 후 실제 사유와 근거 금액/기간을 회신 부탁드립니다.',
+      ].filter(Boolean).join('\n')
+      : [
+        `[${item.title}]`,
+        item.evidence,
+        item.warehouseDetail ? `어디 창고: ${item.warehouseDetail}` : '',
+        item.customerDetail ? `어느 고객사: ${item.customerDetail}` : '',
+        `보고 메모: ${item.question}`,
+      ].filter(Boolean).join('\n');
     const ok = await copyText(text);
     setCopiedId(ok ? item.id : `fail:${item.id}`);
     window.setTimeout(() => setCopiedId(null), 1800);
   };
   const copyContributorQuestion = async (item, row, verdict, kind, scope) => {
     const kindLabel = kind === 'warehouse' ? L('창고', 'Warehouse') : L('고객사', 'Customer');
-    const text = [
-      `[${item.title}]`,
+    const common = [
       `${kindLabel}: ${row.name}`,
       `${L('판정', 'Flag')}: ${verdict.label}`,
       `${L('증감액', 'Delta')}: ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)})`,
@@ -696,11 +752,24 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
         ? `${L('원가율', 'Cost ratio')}: ${ratio(row.ratioPrev)}→${ratio(row.ratioCur)} (${pp(row.ratioDeltaPp)})`
         : '',
       row.share != null ? `${L('기여도', 'Share')}: ${row.share.toFixed(0)}%` : '',
-      `${L('확인 질문', 'Question')}: ${L(
-        `${row.name} 담당자에게 실제 물량·작업시간·단가·계약 조건·비용 배부·일회성/누락/이월 비용 중 어떤 요인인지 확인해 주세요. 수량 효과와 단가 효과를 나눠 설명 가능할까요?`,
-        `Ask the owner of ${row.name} to confirm whether this came from actual volume, work hours, rates, contract terms, cost allocation, one-off cost, omission, or deferred cost. Can they split the reason into quantity effect and rate effect?`,
-      )}`,
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean);
+    const text = copyMode === 'owner'
+      ? [
+        `[확인 요청] ${item.title}`,
+        ...common,
+        L(
+          `${row.name} 담당자님, 실제 물량·작업시간·단가·계약 조건·비용 배부·일회성/누락/이월 비용 중 어떤 요인인지 확인 부탁드립니다. 가능하면 수량 효과와 단가 효과를 나눠서 회신 부탁드립니다.`,
+          `Please confirm whether ${row.name}'s change came from actual volume, work hours, rates, contract terms, cost allocation, one-off cost, omission, or deferred cost. If possible, split the reason into quantity effect and rate effect.`,
+        ),
+      ].join('\n')
+      : [
+        `[보고용] ${item.title}`,
+        ...common,
+        L(
+          `${row.name}은(는) ${verdict.label} 대상으로, 담당자 확인 후 실제 사유를 보고 메모에 반영합니다.`,
+          `${row.name} is flagged as ${verdict.label}; confirmed owner input should be reflected in the report note.`,
+        ),
+      ].join('\n');
     const rowId = `${scope}:${kind}:${row.name}`;
     const ok = await copyText(text);
     setCopiedRowId(ok ? rowId : `fail:${rowId}`);
@@ -840,14 +909,69 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
             </ul>
           </div>
 
+          {priorityChecks.length > 0 && (
+            <div className="rounded-md border border-amber-100 bg-amber-50/70 p-2.5">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <div className="text-[11px] font-semibold text-amber-800">
+                  {L('3. 오늘 우선 확인 TOP 5', '3. Priority check TOP 5')}
+                </div>
+                <span className="text-[10px] text-amber-600">
+                  {L('미확인 우선 · 수치 기반', 'Unconfirmed first · data-based')}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {priorityChecks.map((item, index) => (
+                  <div key={`priority-${item.id}`} className="rounded-md border border-white/70 bg-white/70 p-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-amber-700">#{index + 1}</span>
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.priority.className}`}>
+                        {item.confirmed ? L('확인 완료', 'Confirmed') : item.priority.label}
+                      </span>
+                      <b className="min-w-0 flex-1 truncate text-[11px] text-slate-700">{item.title}</b>
+                    </div>
+                    <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+                      {item.evidence}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <div className="text-[11px] font-semibold text-slate-500">
-                {L('3. 담당자 확인 필요', '3. Needs owner confirmation')}
+                {L('4. 담당자 확인 필요', '4. Needs owner confirmation')}
               </div>
               <span className="text-[10px] text-slate-400">
                 {visibleConfirmedChecks.length}/{visibleChecks.length} {L('확인', 'confirmed')}
               </span>
+            </div>
+            <div className="mb-2 rounded-md border border-slate-100 bg-white/70 p-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-semibold text-slate-500">{L('복사 문구', 'Copy wording')}</span>
+                {[
+                  { id: 'owner', label: L('담당자 문의용', 'For owner inquiry') },
+                  { id: 'report', label: L('보고용', 'For report') },
+                ].map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => setCopyMode(mode.id)}
+                    className={`rounded-full border px-2 py-0.5 text-[10px] ${copyMode === mode.id ? 'border-blue-500 bg-blue-50 font-semibold text-blue-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+                <span className="text-[10px] text-slate-400">
+                  {copyMode === 'owner'
+                    ? L('담당자에게 바로 보낼 질문 형식입니다.', 'Question wording ready to send to owners.')
+                    : L('보고서/발표 메모에 붙이기 좋은 형식입니다.', 'Report/presentation note wording.')}
+                </span>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-400">
+                {L('확인 사유는 현재 조건별로 자동 저장되어 같은 월·지역·구분으로 다시 열면 다시 확인할 수 있습니다.', 'Confirmed reasons are saved by the current period/region/category and can be reviewed again when reopened with the same conditions.')}
+              </p>
             </div>
             <div className="mb-2 flex flex-wrap items-center gap-1">
               {checkFilterOptions.map((filter) => (
@@ -937,7 +1061,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
           {confirmedChecks.length > 0 && (
             <div className="rounded-md border border-emerald-100 bg-emerald-50/70 p-2.5">
               <div className="text-[11px] font-semibold text-emerald-800 mb-1">
-                {L('4. 확인 반영 보고 메모', '4. Confirmed report notes')}
+                {L('5. 확인 반영 보고 메모', '5. Confirmed report notes')}
               </div>
               <ul className="space-y-1 text-[12px] leading-relaxed text-slate-700">
                 {confirmedChecks.map((item) => (
