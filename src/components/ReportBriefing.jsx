@@ -45,20 +45,86 @@ const contributionText = (rows, L, direction = 'increase') => rows.map((row) => 
   return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
 }).join(' · ');
 
+const contributorVerdict = (row, L) => {
+  const ratioGap = row.ratioDeltaPp;
+  if (ratioGap != null && Number.isFinite(ratioGap) && ratioGap >= 5) {
+    return {
+      label: L('원가율↑ 확인', 'Ratio↑ check'),
+      className: 'bg-rose-100 text-rose-700',
+    };
+  }
+  if (ratioGap != null && Number.isFinite(ratioGap) && ratioGap <= -5) {
+    return {
+      label: L('원가율↓ 확인', 'Ratio↓ check'),
+      className: 'bg-blue-100 text-blue-700',
+    };
+  }
+  if (row.share != null && row.share >= 50) {
+    return {
+      label: L('기여도 큼', 'High share'),
+      className: 'bg-amber-100 text-amber-700',
+    };
+  }
+  return {
+    label: L('참고', 'Note'),
+    className: 'bg-slate-100 text-slate-600',
+  };
+};
+
 function ContributorTable({ title, rows = [], tone = 'blue', L }) {
-  if (!rows.length) return null;
+  const [sortBy, setSortBy] = useState('share');
   const toneClass = tone === 'violet'
-    ? { wrap: 'bg-violet-50/80 text-violet-950', head: 'text-violet-500', name: 'text-violet-900' }
-    : { wrap: 'bg-blue-50/80 text-blue-950', head: 'text-blue-500', name: 'text-blue-900' };
+    ? { wrap: 'bg-violet-50/80 text-violet-950', head: 'text-violet-500', name: 'text-violet-900', active: 'border-violet-300 bg-white text-violet-700' }
+    : { wrap: 'bg-blue-50/80 text-blue-950', head: 'text-blue-500', name: 'text-blue-900', active: 'border-blue-300 bg-white text-blue-700' };
+  const sortedRows = useMemo(() => {
+    const valueOf = (row) => {
+      if (sortBy === 'delta') return Math.abs(row.delta || 0);
+      if (sortBy === 'ratio') return Math.abs(row.ratioDeltaPp || 0);
+      return row.share ?? 0;
+    };
+    return [...rows].sort((a, b) => valueOf(b) - valueOf(a));
+  }, [rows, sortBy]);
+  const sortOptions = [
+    { id: 'share', label: L('기여도순', 'Share') },
+    { id: 'delta', label: L('증감액순', 'Amount') },
+    { id: 'ratio', label: L('원가율순', 'Ratio') },
+  ];
+  if (!rows.length) return null;
 
   return (
     <div className={`mt-1 rounded ${toneClass.wrap} p-2`}>
-      <div className="mb-1 text-[11px] font-bold">{title}</div>
+      <div className="mb-1 flex flex-wrap items-center gap-1.5">
+        <div className="text-[11px] font-bold">{title}</div>
+        {tone === 'violet' && (
+          <div className="group relative">
+            <span className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-600">?</span>
+            <div className="pointer-events-none absolute left-0 top-5 z-10 hidden w-64 rounded-md border border-violet-100 bg-white p-2 text-[10px] leading-relaxed text-slate-600 shadow-lg group-hover:block">
+              {L(
+                '고객사 원가는 운영 배부 기준 참고치입니다. 창고·항목별 실제 원가 합계와 다를 수 있어, 보고 전 담당자 확인값을 우선 적용하세요.',
+                'Customer costs are allocation-based reference figures. They may differ from actual warehouse/item totals, so use confirmed owner input for reporting.',
+              )}
+            </div>
+          </div>
+        )}
+        <div className="ml-auto flex flex-wrap gap-1">
+          {sortOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setSortBy(option.id)}
+              className={`rounded-full border px-1.5 py-0.5 text-[10px] ${sortBy === option.id ? toneClass.active : 'border-white/80 bg-white/40 text-slate-500'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-[11px]">
+        <table className="w-full min-w-[650px] text-[11px]">
           <thead>
             <tr className={`border-b border-white/70 ${toneClass.head}`}>
               <th className="py-1 pr-2 text-left font-medium">{L('대상', 'Target')}</th>
+              <th className="py-1 px-2 text-left font-medium">{L('판정', 'Flag')}</th>
               <th className="py-1 px-2 text-right font-medium">{L('증감액', 'Δ')}</th>
               <th className="py-1 px-2 text-right font-medium">{L('전기→당기', 'Base→Now')}</th>
               <th className="py-1 px-2 text-right font-medium">{L('원가율', 'Ratio')}</th>
@@ -66,25 +132,33 @@ function ContributorTable({ title, rows = [], tone = 'blue', L }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.name} className="border-b border-white/50 last:border-0">
-                <td className={`py-1 pr-2 font-semibold ${toneClass.name}`}>{row.name}</td>
-                <td className={`py-1 px-2 text-right tabular-nums font-semibold ${row.delta >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
-                  {row.delta >= 0 ? '+' : ''}{money(row.delta)}
-                </td>
-                <td className="py-1 px-2 text-right tabular-nums text-slate-600">
-                  {money(row.prev)}→{money(row.cur)}
-                </td>
-                <td className="py-1 px-2 text-right tabular-nums text-slate-600">
-                  {row.ratioDeltaPp != null
-                    ? `${ratio(row.ratioPrev)}→${ratio(row.ratioCur)} (${pp(row.ratioDeltaPp)})`
-                    : '-'}
-                </td>
-                <td className="py-1 pl-2 text-right tabular-nums font-semibold text-slate-700">
-                  {row.share != null ? `${row.share.toFixed(0)}%` : '-'}
-                </td>
-              </tr>
-            ))}
+            {sortedRows.map((row) => {
+              const verdict = contributorVerdict(row, L);
+              return (
+                <tr key={row.name} className="border-b border-white/50 last:border-0">
+                  <td className={`py-1 pr-2 font-semibold ${toneClass.name}`}>{row.name}</td>
+                  <td className="py-1 px-2">
+                    <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${verdict.className}`}>
+                      {verdict.label}
+                    </span>
+                  </td>
+                  <td className={`py-1 px-2 text-right tabular-nums font-semibold ${row.delta >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                    {row.delta >= 0 ? '+' : ''}{money(row.delta)}
+                  </td>
+                  <td className="py-1 px-2 text-right tabular-nums text-slate-600">
+                    {money(row.prev)}→{money(row.cur)}
+                  </td>
+                  <td className="py-1 px-2 text-right tabular-nums text-slate-600">
+                    {row.ratioDeltaPp != null
+                      ? `${ratio(row.ratioPrev)}→${ratio(row.ratioCur)} (${pp(row.ratioDeltaPp)})`
+                      : '-'}
+                  </td>
+                  <td className="py-1 pl-2 text-right tabular-nums font-semibold text-slate-700">
+                    {row.share != null ? `${row.share.toFixed(0)}%` : '-'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
