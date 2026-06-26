@@ -46,8 +46,9 @@ const basisValue = (item, basis = 'curYtd') => {
   if (basis === 'recent5') return item.avgRatioRecent5;
   return item.avgRatioCurYtd;
 };
+const cleanCostName = (item) => String(item || '').replace(/^(\d+)\.\s*/, '');
 export function costItemThresholdPp(item, fallback = 5) {
-  const name = String(item || '').replace(/^(\d+)\.\s*/, '').toUpperCase();
+  const name = cleanCostName(item).toUpperCase();
   if (name.includes('OFFICE') || name.includes('SALARY') || name.includes('LABOR') || name.includes('WAGE') || name.includes('인건비')) return 1;
   if (name.includes('RENTAL') || name.includes('RENT') || name.includes('WH')) return 3;
   if (name.includes('HANDLING') || name.includes('LOADING') || name.includes('UNLOADING')) return 3;
@@ -234,12 +235,15 @@ export function costItemCompare(region = '전체', clff = '전체', biz = '전�
 
 // 매출 대비 원가율 기준 이탈 항목. 금액 증감과 별개로 평균 비율에서 벗어난 항목을 잡는다.
 export function costRatioOutliers(region = '전체', clff = '전체', biz = '전체', cmp, topN = 5, options = {}) {
-  const { basis = 'curYtd', thresholdPp = 5 } = options;
+  const { basis = 'curYtd', thresholdPp = 5, thresholdOverrides = {} } = options;
   return costItemCompare(region, clff, biz, cmp)
     .map((item) => {
       const baselineRatio = basisValue(item, basis);
       const basisDeltaPp = item.ratioCur != null && baselineRatio != null ? item.ratioCur - baselineRatio : null;
-      const itemThresholdPp = thresholdPp === 'item' ? costItemThresholdPp(item.item) : thresholdPp;
+      const override = Number(thresholdOverrides[cleanCostName(item.item)]);
+      const itemThresholdPp = thresholdPp === 'item'
+        ? (Number.isFinite(override) && override > 0 ? override : costItemThresholdPp(item.item))
+        : thresholdPp;
       return {
         ...item,
         basis,

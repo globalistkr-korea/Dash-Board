@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   entityDetails, marginDiagnosis, costItemCompare, costItemContributors,
-  costDataQualityAlerts, costRatioOutliers, subtypeToBiz,
+  costDataQualityAlerts, costRatioOutliers, subtypeToBiz, costItemThresholdPp,
 } from '../lib/variance';
 import { useLang } from '../context/LangContext';
 
@@ -44,6 +44,29 @@ const contributionText = (rows, L, direction = 'increase') => rows.map((row) => 
   const rate = row.ratioDeltaPp != null ? `, ${L('원가율', 'cost ratio')} ${ratio(row.ratioPrev)}→${ratio(row.ratioCur)}(${pp(row.ratioDeltaPp)})` : '';
   return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
 }).join(' · ');
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // iOS PWA 등에서 Clipboard API가 실패할 수 있어 textarea 폴백을 사용한다.
+    }
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
 
 function MiniRatioChart({ rows = [], baseline, thresholdPp, item, L }) {
   const [detailOpen, setDetailOpen] = useState(false);
@@ -183,9 +206,10 @@ function loadSettings() {
     return {
       baseline: ['curYtd', 'prevSame', 'recent3', 'recent5'].includes(saved.baseline) ? saved.baseline : 'curYtd',
       thresholdPp: saved.thresholdPp === 'item' || [3, 5, 10].includes(saved.thresholdPp) ? saved.thresholdPp : 'item',
+      itemThresholds: saved.itemThresholds && typeof saved.itemThresholds === 'object' ? saved.itemThresholds : {},
     };
   } catch {
-    return { baseline: 'curYtd', thresholdPp: 'item' };
+    return { baseline: 'curYtd', thresholdPp: 'item', itemThresholds: {} };
   }
 }
 
@@ -218,6 +242,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const [settings, setSettings] = useState(loadSettings);
   const baseline = settings.baseline;
   const thresholdPp = settings.thresholdPp;
+  const itemThresholds = useMemo(() => settings.itemThresholds || {}, [settings.itemThresholds]);
   const selectedBaselineLabel = baselineLabel(baseline, throughMonth, L);
   const diagnosis = useMemo(
     () => marginDiagnosis(cmp, clff, region, subtype),
@@ -244,14 +269,17 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     [region, clff, biz, cmp],
   );
   const rateOutliers = useMemo(
-    () => costRatioOutliers(region, clff, biz, cmp, 5, { basis: baseline, thresholdPp }),
-    [region, clff, biz, cmp, baseline, thresholdPp],
+    () => costRatioOutliers(region, clff, biz, cmp, 5, { basis: baseline, thresholdPp, thresholdOverrides: itemThresholds }),
+    [region, clff, biz, cmp, baseline, thresholdPp, itemThresholds],
   );
   const noteKey = [
     cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype,
   ].join(':');
   const [notes, setNotes] = useState(() => loadNotes(noteKey));
   const [open, setOpen] = useState(true);
+  const [checkFilter, setCheckFilter] = useState('all');
+  const [thresholdOpen, setThresholdOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
 
   useEffect(() => {
     localStorage.setItem(NOTE_PREFIX + noteKey, JSON.stringify(notes));
@@ -269,6 +297,14 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const totalIncrease = increases.reduce((sum, item) => sum + item.delta, 0);
   const topCosts = increases.slice(0, 3);
   const topRateOutliers = rateOutliers.slice(0, 4);
+  const editableCostItems = costs.slice(0, 10).map((item) => {
+    const key = cleanItem(item.item);
+    return {
+      key,
+      label: key,
+      defaultValue: costItemThresholdPp(item.item),
+    };
+  });
   const worstWarehouse = warehouses.find((item) => item.gpDelta < -1);
   const worstCustomer = customers.find((item) => item.gpDelta < -1);
   const costChecks = topCosts.map((item) => {
@@ -412,7 +448,38 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
       ),
     }] : []),
   ].slice(0, 10);
+  const visibleChecks = checkFilter === 'ratio' ? checks.filter((item) => item.id.startsWith('rate:')) : checks;
   const confirmedChecks = checks.filter((item) => notes[item.id]?.trim());
+  const visibleConfirmedChecks = visibleChecks.filter((item) => notes[item.id]?.trim());
+  const updateItemThreshold = (key, value) => {
+    const parsed = Number(value);
+    setSettings((current) => ({
+      ...current,
+      itemThresholds: {
+        ...(current.itemThresholds || {}),
+        [key]: Number.isFinite(parsed) && parsed > 0 ? parsed : '',
+      },
+    }));
+  };
+  const resetItemThreshold = (key) => {
+    setSettings((current) => {
+      const next = { ...(current.itemThresholds || {}) };
+      delete next[key];
+      return { ...current, itemThresholds: next };
+    });
+  };
+  const copyQuestion = async (item) => {
+    const text = [
+      `[${item.title}]`,
+      item.evidence,
+      item.warehouseDetail ? `어디 창고: ${item.warehouseDetail}` : '',
+      item.customerDetail ? `어느 고객사: ${item.customerDetail}` : '',
+      `확인 질문: ${item.question}`,
+    ].filter(Boolean).join('\n');
+    const ok = await copyText(text);
+    setCopiedId(ok ? item.id : `fail:${item.id}`);
+    window.setTimeout(() => setCopiedId(null), 1800);
+  };
 
   return (
     <section className="rounded-lg border border-blue-100 bg-blue-50/60 overflow-hidden">
@@ -474,6 +541,43 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   {L('기본은 항목별 기준 · 선택값은 자동 저장됩니다.', 'Default is by item · selection is saved automatically.')}
                 </span>
               </div>
+              <div className="mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setThresholdOpen((value) => !value)}
+                  className="text-[10px] font-semibold text-blue-600"
+                >
+                  {thresholdOpen ? L('항목별 기준 접기 ▲', 'Hide item thresholds ▲') : L('항목별 기준 편집 ▼', 'Edit item thresholds ▼')}
+                </button>
+                {thresholdOpen && (
+                  <div className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                    {editableCostItems.map((item) => (
+                      <div key={item.key} className="flex items-center gap-1 rounded bg-slate-50 px-2 py-1">
+                        <span className="min-w-0 flex-1 truncate text-[10px] text-slate-600">{item.label}</span>
+                        <input
+                          type="number"
+                          min="0.5"
+                          step="0.5"
+                          value={itemThresholds[item.key] ?? item.defaultValue}
+                          onChange={(event) => updateItemThreshold(item.key, event.target.value)}
+                          className="w-14 rounded border border-slate-200 bg-white px-1 py-0.5 text-right text-[11px] tabular-nums text-slate-700"
+                          aria-label={`${item.label} threshold`}
+                        />
+                        <span className="text-[10px] text-slate-400">%p</span>
+                        {itemThresholds[item.key] != null && itemThresholds[item.key] !== '' && (
+                          <button
+                            type="button"
+                            onClick={() => resetItemThreshold(item.key)}
+                            className="text-[10px] text-slate-400"
+                          >
+                            {L('기본', 'Reset')}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <ul className="space-y-1 text-[12px] leading-relaxed text-slate-700">
               <li>• {L('매출', 'Revenue')} {signed(diagnosis.revYoY)} · {L('매출이익', 'Gross profit')} {signed(diagnosis.gpYoY)} · {L('이익률', 'Margin')} {diagnosis.m0?.toFixed(1) ?? '-'}% → {diagnosis.m1?.toFixed(1) ?? '-'}%</li>
@@ -516,11 +620,26 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                 {L('3. 담당자 확인 필요', '3. Needs owner confirmation')}
               </div>
               <span className="text-[10px] text-slate-400">
-                {confirmedChecks.length}/{checks.length} {L('확인', 'confirmed')}
+                {visibleConfirmedChecks.length}/{visibleChecks.length} {L('확인', 'confirmed')}
               </span>
             </div>
+            <div className="mb-2 flex flex-wrap items-center gap-1">
+              {[
+                { id: 'all', label: L('전체 확인', 'All checks'), count: checks.length },
+                { id: 'ratio', label: L('원가율 이탈만', 'Ratio gaps only'), count: rateChecks.length },
+              ].map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setCheckFilter(filter.id)}
+                  className={`rounded-full border px-2 py-0.5 text-[10px] ${checkFilter === filter.id ? 'border-amber-500 bg-amber-50 text-amber-700 font-semibold' : 'border-slate-200 bg-white text-slate-500'}`}
+                >
+                  {filter.label} {filter.count}
+                </button>
+              ))}
+            </div>
             <div className="space-y-2">
-              {checks.map((item) => {
+              {visibleChecks.map((item) => {
                 const confirmed = Boolean(notes[item.id]?.trim());
                 return (
                   <div key={item.id} className={`rounded-md border bg-white p-2 ${item.urgent ? 'border-rose-200 ring-1 ring-rose-100' : 'border-slate-200'}`}>
@@ -529,6 +648,13 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                         {confirmed ? L('확인 완료', 'Confirmed') : item.urgent ? L('입력 점검', 'Input check') : L('확인 필요', 'Check')}
                       </span>
                       <b className="text-[12px] text-slate-700">{item.title}</b>
+                      <button
+                        type="button"
+                        onClick={() => copyQuestion(item)}
+                        className="ml-auto rounded-full border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500 hover:border-blue-300 hover:text-blue-600"
+                      >
+                        {copiedId === item.id ? L('복사됨', 'Copied') : copiedId === `fail:${item.id}` ? L('복사 실패', 'Copy failed') : L('질문 복사', 'Copy question')}
+                      </button>
                     </div>
                     <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{item.evidence}</p>
                     {item.warehouseDetail && (
@@ -564,7 +690,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   </div>
                 );
               })}
-              {checks.length === 0 && (
+              {visibleChecks.length === 0 && (
                 <p className="text-[11px] text-slate-400">{L('현재 수치에서 별도 확인이 필요한 주요 항목이 없습니다.', 'No major confirmation item found.')}</p>
               )}
             </div>
