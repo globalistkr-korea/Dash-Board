@@ -168,13 +168,12 @@ function ContributorTable({
         ))}
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-[11px]">
+        <table className="w-full min-w-[500px] text-[11px]">
           <thead>
             <tr className={`border-b border-white/70 ${toneClass.head}`}>
               <th className="py-1 pr-2 text-left font-medium">{L('대상', 'Target')}</th>
               <th className="py-1 px-2 text-left font-medium">{L('판정', 'Flag')}</th>
-              <th className="py-1 px-2 text-right font-medium">{L('증감액', 'Δ')}</th>
-              <th className="py-1 px-2 text-right font-medium">{L('전기→당기', 'Base→Now')}</th>
+              <th className="py-1 px-2 text-right font-medium">{L('증감액', 'Δ')}<span className="block text-[9px] font-normal opacity-70">{L('전기→당기', 'base→now')}</span></th>
               <th className="py-1 px-2 text-right font-medium">{L('원가율', 'Ratio')}</th>
               <th className="py-1 pl-2 text-right font-medium">{L('기여도', 'Share')}</th>
               <th className="py-1 pl-2 text-right font-medium">{L('질문', 'Question')}</th>
@@ -192,15 +191,13 @@ function ContributorTable({
                       {verdict.label}
                     </span>
                   </td>
-                  <td className={`py-1 px-2 text-right tabular-nums font-semibold ${row.delta >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
-                    {row.delta >= 0 ? '+' : ''}{money(row.delta)}
+                  <td className="py-1 px-2 text-right tabular-nums whitespace-nowrap">
+                    <span className={`font-semibold ${row.delta >= 0 ? 'text-red-600' : 'text-blue-600'}`}>{row.delta >= 0 ? '+' : ''}{money(row.delta)}</span>
+                    <span className="block text-[10px] text-slate-400">{money(row.prev)}→{money(row.cur)}</span>
                   </td>
-                  <td className="py-1 px-2 text-right tabular-nums text-slate-600">
-                    {money(row.prev)}→{money(row.cur)}
-                  </td>
-                  <td className="py-1 px-2 text-right tabular-nums text-slate-600">
+                  <td className="py-1 px-2 text-right tabular-nums text-slate-600 whitespace-nowrap">
                     {row.ratioDeltaPp != null
-                      ? `${ratio(row.ratioPrev)}→${ratio(row.ratioCur)} (${pp(row.ratioDeltaPp)})`
+                      ? <>{ratio(row.ratioCur)} <span className={row.ratioDeltaPp >= 0 ? 'text-red-500' : 'text-blue-500'}>({pp(row.ratioDeltaPp)})</span></>
                       : '-'}
                   </td>
                   <td className="py-1 pl-2 text-right tabular-nums font-semibold text-slate-700">
