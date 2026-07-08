@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState } from 'react';
-import { UnitProvider } from './context/UnitContext';
 import { LangProvider } from './context/LangContext';
 import Layout from './components/Layout';
 import PlanPage from './pages/PlanPage';
@@ -39,9 +38,7 @@ function AppContent() {
 export default function App() {
   return (
     <LangProvider>
-      <UnitProvider>
-        <AppContent />
-      </UnitProvider>
+      <AppContent />
     </LangProvider>
   );
 }

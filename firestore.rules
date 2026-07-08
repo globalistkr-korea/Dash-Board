@@ -2,8 +2,12 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // appConfig/reportNotes 문서가 아직 없을 때는 소유자 이메일로 폴백
+    // (없으면 get()이 에러 → 전부 거부되는 닭-달걀 문제 방지)
     function allowedReportEmails() {
-      return get(/databases/$(database)/documents/appConfig/reportNotes).data.allowedEmails;
+      return exists(/databases/$(database)/documents/appConfig/reportNotes)
+        ? get(/databases/$(database)/documents/appConfig/reportNotes).data.allowedEmails
+        : ['globalistkr@gmail.com'];
     }
 
     function isAllowedReportUser(userId) {
@@ -14,8 +18,9 @@ service cloud.firestore {
 
     match /appConfig/reportNotes {
       allow read: if request.auth != null;
+      // 허용 목록에 있는 사용자만 갱신(문서 최초 생성 시엔 폴백 목록 적용)
       allow write: if request.auth != null
-        && request.auth.token.email in resource.data.allowedEmails;
+        && request.auth.token.email in allowedReportEmails();
     }
 
     match /reportBriefingNotes/{userId}/items/{noteId} {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
 } from 'recharts';
@@ -11,7 +11,9 @@ import { CMP, CMP_METRICS, CMP_MONTH, ratio, attain } from '../lib/compare';
 import { opsList as opsL, view as opsView, annualOf as opsAnnual, OPS_CURRENT } from '../lib/ops';
 import { marginDiagnosis, cmpYTD, cmpMoM, cmpYoYMonth, subtypeToBiz, entityDetails, costItemCompare } from '../lib/variance';
 import { useLang } from '../context/LangContext';
-import ReportBriefing from '../components/ReportBriefing';
+
+// 1,400줄 보고 브리핑(+Firebase 연동)은 지연 로딩 — 첫 화면 번들에서 분리
+const ReportBriefing = lazy(() => import('../components/ReportBriefing'));
 
 const TABS = ['요약', ...PL_METRICS];
 const RATIO_LABEL = { 매출원가: '원가율', 매출이익: '매출이익률', 판관비: '판관비율', 영업이익: '영업이익률' };
@@ -474,6 +476,9 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
   const { lang } = useLang();
   const L = (ko, en) => (lang === 'en' ? en : ko);
   const biz = subtypeToBiz(subtype);
+  // WM→창고, TM→운송만 운영데이터로 정확히 좁혀짐. 그 외 세부(S/P·해상 등)는
+  // ops에 대응 세그먼트가 없어 사업 전체 기준으로 넓어짐 — 아래 배지로 명시.
+  const bizWidened = subtype !== '전체' && biz === '전체';
   const d = marginDiagnosis(cmp, clff, region, subtype);
   const wh = entityDetails('warehouses', region, clff, biz, cmp);
   const cu = entityDetails('customers', region, clff, biz, cmp);
@@ -490,15 +495,22 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
       <div className={`text-[12px] font-semibold ${color}`}>
         {tag} · {L('매출', 'Rev')} {pp(d.revYoY)} · {L('이익', 'GP')} {pp(d.gpYoY)} · {L('이익률', 'mgn')} {d.m0?.toFixed(1)}→{d.m1?.toFixed(1)}%({pp(d.marginPp)}p){compress ? ' ⚠' : ''}
       </div>
+      {bizWidened && (
+        <div className="text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 inline-block">
+          {L(`※ 아래 창고·고객·원가는 세부(${subtype}) 단위 운영데이터가 없어 ${clff === '전체' ? '전체' : clff} 기준입니다`, `※ WH/customer/cost below use ${clff === '전체' ? 'all' : clff}-level ops data (no per-${subtype} breakdown)`)}
+        </div>
+      )}
 
-      <ReportBriefing
-        key={[cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype].join(':')}
-        tag={tag}
-        cmp={cmp}
-        clff={clff}
-        region={region}
-        subtype={subtype}
-      />
+      <Suspense fallback={<div className="text-[11px] text-slate-400 px-2 py-1">보고 브리핑 불러오는 중…</div>}>
+        <ReportBriefing
+          key={[cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype].join(':')}
+          tag={tag}
+          cmp={cmp}
+          clff={clff}
+          region={region}
+          subtype={subtype}
+        />
+      </Suspense>
 
       {/* 창고별 상세 */}
       <div className="space-y-1">
@@ -720,7 +732,7 @@ function SummaryView({ clff, region, subtype }) {
   }));
   rows.push({
     label: '영업이익률', unit: '%', pct: true,
-    cell: (y) => fmtPct(marginPct(y, '영업이익', clff, region)),
+    cell: (y) => fmtPct(marginPct(y, '영업이익', clff, region, subtype)),
     yoyVal: null,
   });
 
@@ -766,7 +778,7 @@ function MetricView({ metric, clff, region, subtype, onRow }) {
         <Kpi label={`YTD (~${actualCount(cur)}월)`} value={disp(ytd(cur, metric, clff, region, subtype), metric)} unit={unit} accent="slate" />
         <Kpi label="전년비" valueNode={deltaTag(yoy(cur, metric, clff, region, subtype))} accent="slate" />
         <Kpi label={isProfit ? (RATIO_LABEL[metric] || '이익률') : `${YEARS[0].slice(2)}→${cur.slice(2)} 성장`}
-          valueNode={isProfit ? <span className="text-emerald-600">{fmtPct(marginPct(cur, metric, clff, region))}</span> : deltaTag(totalGrowth(metric, clff, region, subtype))}
+          valueNode={isProfit ? <span className="text-emerald-600">{fmtPct(marginPct(cur, metric, clff, region, subtype))}</span> : deltaTag(totalGrowth(metric, clff, region, subtype))}
           accent={isProfit ? 'green' : 'slate'} />
       </div>
 

@@ -6,7 +6,7 @@ import {
 import { useLang } from '../context/LangContext';
 
 const REGIONS = ['전체', '북부', '남부'];
-const CLFFS = ['전체', 'CL', 'FF'];
+const CLFFS = ['전체', 'CL', 'FF', '기타'];
 const BIZS = ['전체', '운송', '창고'];
 const eok = (mn) => mn == null ? '-' : (mn / 100).toLocaleString('ko-KR', { maximumFractionDigits: 1 });
 const mn = (v) => v == null ? '-' : Math.round(v).toLocaleString('ko-KR');

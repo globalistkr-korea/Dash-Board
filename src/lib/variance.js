@@ -30,7 +30,7 @@ const avgMonthlyRatioPct = (costSeries, revSeries, months) => {
   return rows.length ? rows.reduce((sum, v) => sum + v, 0) / rows.length : null;
 };
 const recentMonths = (endMonth, count) => {
-  const end = Math.max(1, endMonth);
+  const end = Math.max(0, endMonth);   // 0이면 빈 구간(1월 분석 시 기준선 없음 → null)
   const start = Math.max(0, end - count);
   return Array.from({ length: end - start }, (_, i) => start + i);
 };
@@ -156,7 +156,7 @@ export function entityDetails(kind, region = '전체', clff = '전체', biz = '�
         ratioPrev: r0,
         ratioCur: r1,
         ratioDeltaPp: r0 != null && r1 != null ? r1 - r0 : null,
-        avgRatioCurYtd: avgMonthlyRatioPct(v.items[it][CURRENT_YEAR], v.revenue?.[CURRENT_YEAR], range(months)),
+        avgRatioCurYtd: avgMonthlyRatioPct(v.items[it][CURRENT_YEAR], v.revenue?.[CURRENT_YEAR], range(months - 1)), // 당월 제외 기준선
         structural: up >= Math.ceil(months * 0.6),
       };
     }).sort((a, b) => b.delta - a.delta);
@@ -192,14 +192,15 @@ export function costItemCompare(region = '전체', clff = '전체', biz = '전�
     const revPrev = pickSum(revenue[cmp.by], cmp.bm);
     const revCur = pickSum(revenue[cmp.cy], cmp.cm);
     const months = analysisCount(cmp);
-    const recent3 = recentMonths(months, 3);
-    const recent5 = recentMonths(months, 5);
+    // 기준선은 '분석 당월 제외' — 당월을 자기 평균에 넣으면 이탈이 희석됨
+    const recent3 = recentMonths(months - 1, 3);
+    const recent5 = recentMonths(months - 1, 5);
     let up = 0;
     for (let i = 0; i < months; i++) if ((v[CURRENT_YEAR][i] || 0) > (v[PREV][i] || 0) * 1.1) up++;
     const ratioPrev = ratioPct(a, revPrev);
     const ratioCur = ratioPct(b, revCur);
-    const avgRatioPrevYear = avgMonthlyRatioPct(v[PREV], revenue[PREV], range(months));
-    const avgRatioCurYtd = avgMonthlyRatioPct(v[CURRENT_YEAR], revenue[CURRENT_YEAR], range(months));
+    const avgRatioPrevYear = avgMonthlyRatioPct(v[PREV], revenue[PREV], range(months)); // 전년 동일기간(전년 당월 포함이 올바름)
+    const avgRatioCurYtd = avgMonthlyRatioPct(v[CURRENT_YEAR], revenue[CURRENT_YEAR], range(months - 1));
     const avgRatioRecent3 = avgMonthlyRatioPct(v[CURRENT_YEAR], revenue[CURRENT_YEAR], recent3);
     const avgRatioRecent5 = avgMonthlyRatioPct(v[CURRENT_YEAR], revenue[CURRENT_YEAR], recent5);
     const avgDeltaPp = ratioCur != null && avgRatioCurYtd != null ? ratioCur - avgRatioCurYtd : null;

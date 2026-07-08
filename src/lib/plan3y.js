@@ -84,10 +84,10 @@ export function bySubtype(year, metric, clff = '전체', region = '전체') {
     .sort((a, b) => b.annual - a.annual);
 }
 
-// 이익률(%) = 이익/매출
-export function marginPct(year, profitMetric, clff = '전체', region = '전체') {
-  const rev = annual(year, '매출', clff, region);
-  const pr = annual(year, profitMetric, clff, region);
+// 이익률(%) = 이익/매출 — subtype까지 동일 범위로 계산해야 다른 수치와 일치
+export function marginPct(year, profitMetric, clff = '전체', region = '전체', subtype = '전체') {
+  const rev = annual(year, '매출', clff, region, subtype);
+  const pr = annual(year, profitMetric, clff, region, subtype);
   return rev ? (pr / rev) * 100 : null;
 }
 

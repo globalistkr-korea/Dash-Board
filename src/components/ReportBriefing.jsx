@@ -541,6 +541,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const [cloudHistory, setCloudHistory] = useState([]);
   const [allowedEmails, setAllowedEmails] = useState(['globalistkr@gmail.com']);
   const [expandedHistoryKey, setExpandedHistoryKey] = useState('');
+  const [historyVersion, setHistoryVersion] = useState(0); // 클라우드 저장 성공 시에만 증가
   const canUseCloudNotes = isAllowedReportUser(cloudUser, allowedEmails);
 
   useEffect(() => {
@@ -553,6 +554,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     const saveTimer = window.setTimeout(async () => {
       const ok = await saveReportNotesToCloud(noteKey, notes);
       setCloudStatus(ok ? 'synced' : 'local');
+      if (ok) setHistoryVersion((v) => v + 1);
     }, 700);
     return () => window.clearTimeout(saveTimer);
   }, [activeNoteKey, canUseCloudNotes, cloudUser?.uid, noteKey, notes]);
@@ -595,7 +597,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
     return () => {
       alive = false;
     };
-  }, [canUseCloudNotes, cloudUser?.uid, noteKey, notes]);
+    // notes 대신 historyVersion: 키 입력마다 getDocs 쿼리가 나가던 것을 저장 성공 시 1회로 축소
+  }, [canUseCloudNotes, cloudUser?.uid, noteKey, historyVersion]);
 
   useEffect(() => {
     let unsubscribe = () => {};

@@ -1,5 +1,4 @@
 import { BarChart2, Users, Warehouse, FileText, TrendingUp } from 'lucide-react';
-import { useUnit } from '../context/UnitContext';
 import { useLang } from '../context/LangContext';
 
 const NAV_ITEMS = [
@@ -24,20 +23,8 @@ function LangToggle() {
   );
 }
 
-function UnitToggle() {
-  const { unit, toggleUnit } = useUnit();
-  return (
-    <button
-      onClick={toggleUnit}
-      className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-700/60 hover:bg-blue-700 text-xs font-semibold text-white transition-colors"
-      title="단위 전환 (백만동 ↔ 백만원)"
-    >
-      <span className={unit === 'vnd' ? 'text-white' : 'text-blue-300'}>백만동</span>
-      <span className="text-blue-400">/</span>
-      <span className={unit === 'krw' ? 'text-white' : 'text-blue-300'}>백만원</span>
-    </button>
-  );
-}
+// (구)UnitToggle: 소비하는 화면이 없어 아무 효과가 없던 죽은 토글 — 제거(2026-07).
+// 단위는 화면별 고정: 경영계획=원화(억원/백만원), 창고·고객=동(억동/백만동).
 
 export default function Layout({ currentPage, onNavigate, children }) {
   const { t } = useLang();
@@ -67,7 +54,6 @@ export default function Layout({ currentPage, onNavigate, children }) {
               ))}
             </nav>
             <LangToggle />
-            <UnitToggle />
           </div>
         </div>
       </header>
