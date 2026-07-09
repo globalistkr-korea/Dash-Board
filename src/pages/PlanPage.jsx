@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
 } from 'recharts';
@@ -310,17 +310,49 @@ function MonthTable({ metric, clff, region, subtype }) {
 /* ── 월간 비교 (당월 vs 전월 vs 전년동월 + 누계) ──────────── */
 const arrSum = (a, n) => (a || []).slice(0, n).reduce((x, v) => x + (v || 0), 0);
 const pctOf = (cur, base) => (base ? ((cur - base) / Math.abs(base)) * 100 : null);
+const MONTHLY_VIEW_KEY = 'vn_dashboard_monthly_view_v1';
+const MONTHLY_VIEW_MODES = ['요약', '점검', '상세'];
+const MONTHLY_COMPARE_BASIS = ['mom', 'yoy', 'ytd'];
+
+function loadMonthlyViewState(lastActual) {
+  const fallback = {
+    month: lastActual,
+    viewMode: '요약',
+    compareBasis: lastActual > 1 ? 'mom' : 'yoy',
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(MONTHLY_VIEW_KEY) || '{}');
+    const savedMonth = Number(saved.month);
+    const month = Number.isFinite(savedMonth)
+      ? Math.min(Math.max(1, savedMonth), lastActual)
+      : fallback.month;
+    const compareBasis = MONTHLY_COMPARE_BASIS.includes(saved.compareBasis)
+      ? (month === 1 && saved.compareBasis === 'mom' ? 'yoy' : saved.compareBasis)
+      : fallback.compareBasis;
+    return {
+      month,
+      viewMode: MONTHLY_VIEW_MODES.includes(saved.viewMode) ? saved.viewMode : fallback.viewMode,
+      compareBasis,
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 function MonthlyView({ clff, region, subtype }) {
   const { t, lang } = useLang();
   const meta = monthsMeta(CURRENT_YEAR);
   const lastActual = actualCount(CURRENT_YEAR);
-  const [m, setM] = useState(lastActual);          // 선택 월(1~12)
-  const [viewMode, setViewMode] = useState('요약');
-  const [compareBasis, setCompareBasis] = useState(lastActual > 1 ? 'mom' : 'yoy');
+  const [m, setM] = useState(() => loadMonthlyViewState(lastActual).month);          // 선택 월(1~12)
+  const [viewMode, setViewMode] = useState(() => loadMonthlyViewState(lastActual).viewMode);
+  const [compareBasis, setCompareBasis] = useState(() => loadMonthlyViewState(lastActual).compareBasis);
   const prevYear = YEARS[YEARS.indexOf(CURRENT_YEAR) - 1];
   const type = meta[m - 1].type;                    // 실적 | 계획
   const effectiveBasis = m === 1 && compareBasis === 'mom' ? 'yoy' : compareBasis;
+
+  useEffect(() => {
+    localStorage.setItem(MONTHLY_VIEW_KEY, JSON.stringify({ month: m, viewMode, compareBasis: effectiveBasis }));
+  }, [m, viewMode, effectiveBasis]);
 
   const rows = PL_METRICS.map((metric) => {
     const cur = series(CURRENT_YEAR, metric, clff, region, subtype);

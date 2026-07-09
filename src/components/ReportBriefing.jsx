@@ -15,6 +15,7 @@ import { useLang } from '../context/LangContext';
 
 const NOTE_PREFIX = 'vn_dashboard_report_notes_v1:';
 const SETTINGS_KEY = 'vn_dashboard_report_ratio_settings_v1';
+const COPY_MODE_KEY = 'vn_dashboard_report_copy_mode_v1';
 const cleanItem = (item) => item.replace(/^(\d+)\.\s*/, '');
 const signed = (value, digits = 1) => (
   value == null || !Number.isFinite(value)
@@ -52,6 +53,11 @@ const contributionText = (rows, L, direction = 'increase') => rows.map((row) => 
   const rate = row.ratioDeltaPp != null ? `, ${L('원가율', 'cost ratio')} ${ratio(row.ratioPrev)}→${ratio(row.ratioCur)}(${pp(row.ratioDeltaPp)})` : '';
   return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
 }).join(' · ');
+
+const topContributor = (rows = []) => rows.reduce((top, row) => {
+  if (!top) return row;
+  return Math.abs(row.delta || 0) > Math.abs(top.delta || 0) ? row : top;
+}, null);
 
 const contributorVerdict = (row, L, thresholdPp = 5) => {
   const ratioGap = row.ratioDeltaPp;
@@ -462,6 +468,15 @@ function loadSettings() {
   }
 }
 
+function loadCopyMode() {
+  try {
+    const saved = localStorage.getItem(COPY_MODE_KEY);
+    return ['owner', 'mail', 'report'].includes(saved) ? saved : 'owner';
+  } catch {
+    return 'owner';
+  }
+}
+
 function reportConclusion(d, L) {
   if (d.marginPp != null && d.marginPp <= -1) {
     return L(
@@ -532,7 +547,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
   const [thresholdOpen, setThresholdOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [copiedRowId, setCopiedRowId] = useState(null);
-  const [copyMode, setCopyMode] = useState('owner');
+  const [copyMode, setCopyMode] = useState(loadCopyMode);
   const [cloudStatus, setCloudStatus] = useState(() => loadCloudStatus(noteKey));
   const [activeNoteKey, setActiveNoteKey] = useState(noteKey);
   const [cloudUser, setCloudUser] = useState(null);
@@ -640,6 +655,10 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
+  useEffect(() => {
+    localStorage.setItem(COPY_MODE_KEY, copyMode);
+  }, [copyMode]);
+
   const increases = costs.filter((item) => item.delta > 0);
   const decreases = costs
     .filter((item) => item.delta < 0 && item.prev >= 100 && (item.cur === 0 || item.cur <= item.prev * 0.3))
@@ -674,6 +693,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     return {
       id: `cost:${item.item}`,
       item: item.item,
+      delta: item.delta,
       title: L(`${cleanItem(item.item)} 증가 사유`, `${cleanItem(item.item)} increase`),
       evidence: L(
         `${money(item.prev)} → ${money(item.cur)}백만동, ${money(item.delta)}백만동 증가 (${signed(item.pct)}). 매출 대비 원가율은 ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)})이고, ${curAvgLabel} ${ratio(item.avgRatioCurYtd)} 대비 ${pp(item.avgDeltaPp)}입니다. ${item.structural ? '여러 달 반복되어 구조적 가능성이 있습니다.' : '특정 기간 집중 여부를 확인해야 합니다.'}`,
@@ -710,6 +730,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     return {
       id: `rate:${item.item}`,
       urgent: Math.abs(item.basisDeltaPp || 0) >= item.thresholdPp,
+      delta: item.delta,
       title: L(`${cleanItem(item.item)} 원가율 이탈`, `${cleanItem(item.item)} cost-ratio deviation`),
       evidence: L(
         `금액은 ${money(item.prev)} → ${money(item.cur)}백만동(${item.delta >= 0 ? '+' : ''}${money(item.delta)})이고, 매출 대비 원가율은 ${ratio(item.ratioCur)}입니다. 선택 기준선 ${selectedBaselineLabel} ${ratio(item.baselineRatio)} 대비 ${pp(item.basisDeltaPp)}로, 임계값 ${item.thresholdPp}%p를 벗어났습니다. 참고로 ${curAvgLabel} 대비 ${pp(item.avgDeltaPp)}, ${prevAvgLabel} 대비 ${pp(item.prevAvgDeltaPp)}입니다.`,
@@ -746,6 +767,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       id: `drop:${item.item}`,
       item: item.item,
       urgent: true,
+      delta: item.delta,
       title: `${cleanItem(item.item)} · ${dropType(item, L)}`,
       evidence: L(
         `${money(item.prev)} → ${money(item.cur)}백만동, ${money(Math.abs(item.delta))}백만동 감소 (${signed(item.pct)}). 실제 절감일 수도 있지만 미기입·자릿수·계정 변경 가능성을 먼저 확인해야 합니다.`,
@@ -770,6 +792,9 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     return {
       id: `data:${alert.kind}:${alert.entity}:${alert.item}`,
       urgent: true,
+      delta: (alert.cur || 0) - (alert.prev || 0),
+      topWarehouse: alert.kind === 'warehouses' ? alert.entity : '-',
+      topCustomer: alert.kind === 'customers' ? alert.entity : '-',
       title: `${targetType} ${alert.entity} · ${cleanItem(alert.item)} · ${alertType(alert, L)}`,
       evidence: L(
         `${money(alert.prev)} → ${money(alert.cur)}백만동 (${signed(alert.pct)}). 전체 합계에서 다른 대상의 증가와 상쇄되더라도 개별 입력값은 별도 점검이 필요합니다.`,
@@ -788,6 +813,9 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     ...costChecks,
     ...(worstWarehouse ? [{
       id: `warehouse:${worstWarehouse.name}`,
+      delta: worstWarehouse.gpDelta,
+      topWarehouse: worstWarehouse.name,
+      topCustomer: '-',
       title: L(`${worstWarehouse.name} 이익 악화`, `${worstWarehouse.name} profit decline`),
       evidence: L(
         `매출이익 ${money(worstWarehouse.gpDelta)}백만동 변동, 매출 ${signed(worstWarehouse.revPct)}, 마진 ${worstWarehouse.marginPp == null ? '-' : `${worstWarehouse.marginPp.toFixed(1)}%p`}.`,
@@ -800,6 +828,9 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     }] : []),
     ...(worstCustomer ? [{
       id: `customer:${worstCustomer.name}`,
+      delta: worstCustomer.gpDelta,
+      topWarehouse: '-',
+      topCustomer: worstCustomer.name,
       title: L(`${worstCustomer.name} 고객 영향`, `${worstCustomer.name} customer impact`),
       evidence: L(
         `매출이익 ${money(worstCustomer.gpDelta)}백만동 변동, 매출 ${signed(worstCustomer.revPct)}.`,
@@ -826,11 +857,19 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
   const confirmedChecks = checks.filter((item) => notes[item.id]?.trim());
   const visibleConfirmedChecks = visibleChecks.filter((item) => notes[item.id]?.trim());
   const priorityChecks = checks
-    .map((item) => ({
-      ...item,
-      priority: checkPriority(item, L),
-      confirmed: Boolean(notes[item.id]?.trim()),
-    }))
+    .map((item) => {
+      const warehouseTop = topContributor(item.warehouseRows);
+      const customerTop = topContributor(item.customerRows);
+      const rawImpact = item.delta ?? warehouseTop?.delta ?? customerTop?.delta ?? 0;
+      return {
+        ...item,
+        priority: checkPriority(item, L),
+        confirmed: Boolean(notes[item.id]?.trim()),
+        impact: Math.abs(rawImpact || 0),
+        topWarehouse: item.topWarehouse || warehouseTop?.name || '-',
+        topCustomer: item.topCustomer || customerTop?.name || '-',
+      };
+    })
     .sort((a, b) => {
       if (a.confirmed !== b.confirmed) return a.confirmed ? 1 : -1;
       return b.priority.score - a.priority.score;
@@ -954,16 +993,28 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
   const copyPriorityChecks = async () => {
     const text = [
       copyMode === 'report' ? '[보고용] 오늘 우선 확인 TOP 5' : '[확인 요청] 오늘 우선 확인 TOP 5',
-      ...priorityChecks.map((item, index) => [
-        `${index + 1}. ${item.title}`,
-        `- ${L('판정', 'Flag')}: ${item.confirmed ? L('확인 완료', 'Confirmed') : item.priority.label}`,
-        `- ${L('근거', 'Evidence')}: ${item.evidence}`,
-        copyMode === 'report'
-          ? `- ${L('보고 메모', 'Report note')}: 담당자 확인 후 실제 사유를 반영합니다.`
-          : copyMode === 'mail'
-            ? `- ${L('요청', 'Request')}: ${item.question} ${L('확인 후 실제 사유와 근거 금액/기간을 회신 부탁드립니다.', 'Please reply with the confirmed reason and supporting amount/period.')}`
-            : `- ${L('확인', 'Check')}: ${item.question}`,
-      ].join('\n')),
+      ...priorityChecks.map((item, index) => {
+        const impactText = item.impact > 0 ? `${money(item.impact)}${L('백만동', ' M dong')}` : '-';
+        const statusText = item.confirmed ? L('확인 완료', 'Confirmed') : item.priority.label;
+        if (copyMode === 'owner') {
+          return [
+            `${index + 1}. ${item.title} · ${statusText} · ${L('영향', 'Impact')} ${impactText}`,
+            `- ${L('대표 창고', 'Top warehouse')}: ${item.topWarehouse} / ${L('대표 고객사', 'Top customer')}: ${item.topCustomer}`,
+            `- ${L('확인', 'Check')}: ${item.question}`,
+          ].join('\n');
+        }
+        return [
+          `${index + 1}. ${item.title}`,
+          `- ${L('판정', 'Flag')}: ${statusText}`,
+          `- ${L('영향', 'Impact')}: ${impactText}`,
+          `- ${L('대표 창고', 'Top warehouse')}: ${item.topWarehouse}`,
+          `- ${L('대표 고객사', 'Top customer')}: ${item.topCustomer}`,
+          `- ${L('근거', 'Evidence')}: ${item.evidence}`,
+          copyMode === 'report'
+            ? `- ${L('보고 메모', 'Report note')}: 담당자 확인 후 실제 사유를 반영합니다.`
+            : `- ${L('요청', 'Request')}: ${item.question} ${L('확인 후 실제 사유와 근거 금액/기간을 회신 부탁드립니다.', 'Please reply with the confirmed reason and supporting amount/period.')}`,
+        ].join('\n');
+      }),
     ].join('\n\n');
     const ok = await copyText(text);
     setCopiedId(ok ? 'priority' : 'fail:priority');
@@ -1150,37 +1201,43 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-[11px]">
+                <table className="w-full min-w-[760px] text-[11px]">
                   <thead>
                     <tr className="border-b border-amber-100 text-amber-700">
                       <th className="py-1 pr-2 text-left font-medium">{L('순위', 'No.')}</th>
                       <th className="py-1 px-2 text-left font-medium">{L('항목', 'Item')}</th>
                       <th className="py-1 px-2 text-left font-medium">{L('구분', 'Flag')}</th>
-                      <th className="py-1 px-2 text-left font-medium">{L('핵심 근거', 'Key evidence')}</th>
+                      <th className="py-1 px-2 text-right font-medium">
+                        {L('영향액', 'Impact')}
+                        <span className="block text-[9px] font-normal opacity-70">{L('백만동', 'M dong')}</span>
+                      </th>
+                      <th className="py-1 px-2 text-left font-medium">{L('대표 창고', 'Top warehouse')}</th>
+                      <th className="py-1 px-2 text-left font-medium">{L('대표 고객사', 'Top customer')}</th>
                       <th className="py-1 pl-2 text-right font-medium">{L('상태', 'Status')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {priorityChecks.map((item, index) => {
-                      const shortEvidence = item.evidence.split('.').slice(0, 1).join('.').replace(/입니다$/, '');
-                      return (
-                        <tr key={`priority-${item.id}`} className="border-b border-white/70 last:border-0">
-                          <td className="py-1 pr-2 font-bold text-amber-700">#{index + 1}</td>
-                          <td className="py-1 px-2 font-semibold text-slate-700">{item.title}</td>
-                          <td className="py-1 px-2">
-                            <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.priority.className}`}>
-                              {item.priority.label}
-                            </span>
-                          </td>
-                          <td className="py-1 px-2 text-slate-500">{shortEvidence}</td>
-                          <td className="py-1 pl-2 text-right">
-                            <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-amber-700'}`}>
-                              {item.confirmed ? L('확인 완료', 'Confirmed') : L('확인 필요', 'Check')}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {priorityChecks.map((item, index) => (
+                      <tr key={`priority-${item.id}`} className="border-b border-white/70 last:border-0">
+                        <td className="py-1 pr-2 font-bold text-amber-700">#{index + 1}</td>
+                        <td className="py-1 px-2 font-semibold text-slate-700">{item.title}</td>
+                        <td className="py-1 px-2">
+                          <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.priority.className}`}>
+                            {item.priority.label}
+                          </span>
+                        </td>
+                        <td className="py-1 px-2 text-right tabular-nums font-semibold text-slate-700">
+                          {item.impact > 0 ? money(item.impact) : '-'}
+                        </td>
+                        <td className="py-1 px-2 text-slate-600">{item.topWarehouse}</td>
+                        <td className="py-1 px-2 text-slate-600">{item.topCustomer}</td>
+                        <td className="py-1 pl-2 text-right">
+                          <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-amber-700'}`}>
+                            {item.confirmed ? L('확인 완료', 'Confirmed') : L('확인 필요', 'Check')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
