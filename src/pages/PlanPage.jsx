@@ -45,7 +45,7 @@ function FilterLabel({ ko }) {
 
 export default function PlanPage() {
   const { t, lang } = useLang();
-  const [mode, setMode] = useState('연간 비교');
+  const [mode, setMode] = useState('월간 비교');
   const [tab, setTab] = useState('요약');
   const [clff, setClff] = useState('전체');
   const [region, setRegion] = useState('북부');   // 북부 담당자 기본
@@ -316,8 +316,11 @@ function MonthlyView({ clff, region, subtype }) {
   const meta = monthsMeta(CURRENT_YEAR);
   const lastActual = actualCount(CURRENT_YEAR);
   const [m, setM] = useState(lastActual);          // 선택 월(1~12)
+  const [viewMode, setViewMode] = useState('요약');
+  const [compareBasis, setCompareBasis] = useState(lastActual > 1 ? 'mom' : 'yoy');
   const prevYear = YEARS[YEARS.indexOf(CURRENT_YEAR) - 1];
   const type = meta[m - 1].type;                    // 실적 | 계획
+  const effectiveBasis = m === 1 && compareBasis === 'mom' ? 'yoy' : compareBasis;
 
   const rows = PL_METRICS.map((metric) => {
     const cur = series(CURRENT_YEAR, metric, clff, region, subtype);
@@ -337,11 +340,21 @@ function MonthlyView({ clff, region, subtype }) {
   });
 
   const moLabel = (i) => (lang === 'en' ? `${i + 1}` : `${i + 1}월`);
+  const viewOptions = [
+    { id: '요약', label: lang === 'en' ? 'Summary' : '요약' },
+    { id: '점검', label: lang === 'en' ? 'Check' : '점검' },
+    { id: '상세', label: lang === 'en' ? 'Detail' : '상세' },
+  ];
+  const basisOptions = [
+    { id: 'mom', label: lang === 'en' ? 'MoM' : '전월비', disabled: m === 1 },
+    { id: 'yoy', label: lang === 'en' ? 'YoY month' : '전년동월비' },
+    { id: 'ytd', label: lang === 'en' ? 'YTD YoY' : '누계 전년비' },
+  ];
 
   return (
     <>
       {/* 목표 대비 원본은 최신 실적월 자료만 있으므로 해당 월에서만 표시 */}
-      {m === lastActual && (
+      {m === lastActual && viewMode === '상세' && (
         <>
           <PlanCard />
           <LineCard metric="매출" />
@@ -352,12 +365,52 @@ function MonthlyView({ clff, region, subtype }) {
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs text-slate-400 mr-1">{lang === 'en' ? 'Month' : '기준 월'}</span>
         {meta.map((mo, i) => (
-          <button key={i} onClick={() => setM(i + 1)} disabled={i + 1 > lastActual}
+          <button
+            key={i}
+            onClick={() => {
+              setM(i + 1);
+              if (i === 0 && compareBasis === 'mom') setCompareBasis('yoy');
+            }}
+            disabled={i + 1 > lastActual}
             className={`w-9 py-1 rounded-lg text-xs font-medium transition-colors
               ${m === i + 1 ? 'bg-blue-700 text-white' : mo.type === '실적' ? 'bg-white text-slate-600 border border-slate-200' : 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed'}`}>
             {moLabel(i)}
           </button>
         ))}
+      </div>
+
+      <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-2.5 space-y-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-semibold text-blue-900">{lang === 'en' ? 'Monthly workflow' : '북부 월간 업무 보기'}</span>
+          <span className="text-[10px] text-blue-500">{lang === 'en' ? 'Show only one comparison detail to reduce repetition.' : '중복을 줄이기 위해 선택한 비교 기준만 펼칩니다.'}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="w-14 text-[10px] font-semibold text-slate-500">{lang === 'en' ? 'View' : '보기'}</span>
+          {viewOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setViewMode(option.id)}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${viewMode === option.id ? 'border-blue-500 bg-white text-blue-700 shadow-sm' : 'border-blue-100 bg-white/60 text-slate-500'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="w-14 text-[10px] font-semibold text-slate-500">{lang === 'en' ? 'Compare' : '비교'}</span>
+          {basisOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              disabled={option.disabled}
+              onClick={() => setCompareBasis(option.id)}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-40 ${effectiveBasis === option.id ? 'border-amber-500 bg-white text-amber-700 shadow-sm' : 'border-blue-100 bg-white/60 text-slate-500'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 당월 비교 */}
@@ -390,10 +443,19 @@ function MonthlyView({ clff, region, subtype }) {
         </div>
       </Card>
 
-      {/* 당월 변동 원인 분석 */}
-      <VarianceCard clff={clff} region={region} subtype={subtype} mode="month" month={m} />
+      {/* 선택 기준 변동 원인 분석 */}
+      <VarianceCard
+        clff={clff}
+        region={region}
+        subtype={subtype}
+        mode={effectiveBasis === 'ytd' ? 'ytd' : 'month'}
+        basis={effectiveBasis}
+        viewMode={viewMode}
+        month={m}
+      />
 
       {/* 누계 비교 */}
+      {(effectiveBasis === 'ytd' || viewMode === '상세') && (
       <Card title="누계 비교" hint={`1~${moLabel(m - 1)} · ${t('누계')}`}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
@@ -422,9 +484,7 @@ function MonthlyView({ clff, region, subtype }) {
           </table>
         </div>
       </Card>
-
-      {/* 누계 변동 원인 분석 */}
-      {m > 1 && <VarianceCard clff={clff} region={region} subtype={subtype} mode="ytd" month={m} />}
+      )}
 
       <p className="text-[11px] text-slate-400 text-center">{lang === 'en' ? 'Current month vs prev month / same month last year · YTD vs last year & annual progress' : '당월=전월·전년동월 대비, 누계=전년 대비·연간 전망 진행률 · 단위 매출 억원/이익 백만원'}</p>
     </>
@@ -472,7 +532,7 @@ function EntityBlock({ e, L, mnD, pp, periodTag }) {
 }
 
 /* 한 비교기간(cmp)의 상세 — 창고별·고객별 각각 원가 사유 + 판정 */
-function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
+function VarianceSection({ tag, color, cmp, clff, region, subtype, viewMode = '상세' }) {
   const { lang } = useLang();
   const L = (ko, en) => (lang === 'en' ? en : ko);
   const biz = subtypeToBiz(subtype);
@@ -509,25 +569,30 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
           clff={clff}
           region={region}
           subtype={subtype}
+          viewMode={viewMode}
         />
       </Suspense>
 
       {/* 창고별 상세 */}
+      {viewMode === '상세' && (
       <div className="space-y-1">
         <div className="text-[11px] font-semibold text-slate-500">{L('▌창고별 점검', '▌By warehouse')}</div>
         {whW.length ? whW.map((e) => <EntityBlock key={e.name} e={e} L={L} mnD={mnD} pp={pp} periodTag={tag} />)
           : <div className="text-[11px] text-slate-400 pl-1">{L('이익 악화 창고 없음.', 'No declining warehouse.')}</div>}
       </div>
+      )}
 
       {/* 고객별 상세 */}
+      {viewMode === '상세' && (
       <div className="space-y-1">
         <div className="text-[11px] font-semibold text-slate-500">{L('▌고객사별 점검', '▌By customer')}</div>
         {cuW.length ? cuW.map((e) => <EntityBlock key={e.name} e={e} L={L} mnD={mnD} pp={pp} periodTag={tag} />)
           : <div className="text-[11px] text-slate-400 pl-1">{L('이익 악화 고객 없음.', 'No declining customer.')}</div>}
       </div>
+      )}
 
       {/* 전체 원가 합계 비교 */}
-      {items.length > 0 && (
+      {viewMode === '상세' && items.length > 0 && (
         <table className="w-full text-[11px] mt-0.5">
           <thead>
             <tr className="text-slate-400">
@@ -568,7 +633,7 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype }) {
 }
 
 /* 변동 원인 상세 — 전월비/전년비 섹션으로 창고·고객·원가 사유 전개. mode: 'ytd'|'month' */
-function VarianceCard({ clff, region, subtype, mode = 'ytd', month = actualCount(CURRENT_YEAR) }) {
+function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', viewMode = '상세', month = actualCount(CURRENT_YEAR) }) {
   const { lang } = useLang();
   const L = (ko, en) => (lang === 'en' ? en : ko);
   const monthCmp = cmpMoM(month);
@@ -581,20 +646,17 @@ function VarianceCard({ clff, region, subtype, mode = 'ytd', month = actualCount
   const scope = [regLab, clff !== '전체' && clff, subtype !== '전체' && subtype].filter(Boolean).join(' · ');
   const title = `${L('변동 원인 상세', 'Variance detail')} · ${scope}`;
   const sections = mode === 'month'
-    ? [
-        ...(monthCmp ? [{
+    ? (basis === 'mom' && monthCmp ? [{
           tag: L(`전월비 ${month - 1}→${month}월`, `MoM ${month - 1}→${month}M`),
           color: 'text-amber-800',
           cmp: monthCmp,
-        }] : []),
-        {
+        }] : [{
           tag: month === 1
             ? L('1월 전년동월비 · 1월 누계 동일', 'January YoY · same as January YTD')
             : L(`전년동월비 ${month}월`, `YoY ${month}M`),
           color: 'text-indigo-700',
           cmp: cmpYoYMonth(month),
-        },
-      ]
+        }])
     : [{
         tag: L(`1~${month}월 누계 전년비`, `YTD through ${month}M YoY`),
         color: 'text-amber-800',
@@ -613,9 +675,12 @@ function VarianceCard({ clff, region, subtype, mode = 'ytd', month = actualCount
           clff={clff}
           region={region}
           subtype={subtype}
+          viewMode={viewMode}
         />
       ))}
-      <div className="text-[10px] text-slate-400">{L('※ 매출·이익률=경영계획(원). 창고·고객·원가항목=운영데이터(백만동). ▼악화/▲개선=매출이익 증감. 🔧=구조적(여러 달 지속). 교차확인 권장.', '※ Rev/margin: KRW (P&L). WH/cust/cost: ops (M dong). ▼down/▲up = gross-profit Δ. 🔧 = structural. Cross-check advised.')}</div>
+      {viewMode === '상세' && (
+        <div className="text-[10px] text-slate-400">{L('※ 매출·이익률=경영계획(원). 창고·고객·원가항목=운영데이터(백만동). ▼악화/▲개선=매출이익 증감. 🔧=구조적(여러 달 지속). 교차확인 권장.', '※ Rev/margin: KRW (P&L). WH/cust/cost: ops (M dong). ▼down/▲up = gross-profit Δ. 🔧 = structural. Cross-check advised.')}</div>
+      )}
     </div>
   );
 }

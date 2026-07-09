@@ -481,9 +481,11 @@ function reportConclusion(d, L) {
   );
 }
 
-export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
+export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMode = '상세' }) {
   const { lang } = useLang();
   const L = (ko, en) => (lang === 'en' ? en : ko);
+  const isSummary = viewMode === '요약';
+  const isDetail = viewMode === '상세';
   const biz = subtypeToBiz(subtype);
   const throughMonth = Math.max(...cmp.cm.map((i) => i + 1));
   const curAvgLabel = L(`26년 1~${throughMonth}월 평균`, `2026 Jan-${throughMonth}M avg`);
@@ -646,6 +648,10 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
   const totalIncrease = increases.reduce((sum, item) => sum + item.delta, 0);
   const topCosts = increases.slice(0, 3);
   const topRateOutliers = rateOutliers.slice(0, 4);
+  const displayRateOutliers = isDetail ? topRateOutliers : topRateOutliers.slice(0, 2);
+  const displayTopCosts = isDetail ? topCosts : topCosts.slice(0, 2);
+  const displayDecreases = isDetail ? decreases : decreases.slice(0, 1);
+  const displayAlerts = isDetail ? [...warehouseAlerts, ...customerAlerts].slice(0, 5) : [...warehouseAlerts, ...customerAlerts].slice(0, 2);
   const editableCostItems = costs.slice(0, 10).map((item) => {
     const key = cleanItem(item.item);
     return {
@@ -1019,6 +1025,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
             <div className="text-[11px] font-semibold text-slate-500 mb-1">
               {L('2. 앱에서 수치로 확인된 내용', '2. Verified by app data')}
             </div>
+            {isDetail && (
             <div className="mb-2 rounded-md border border-blue-100 bg-white/70 p-2">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[10px] font-semibold text-slate-500">{L('원가율 기준선', 'Cost-ratio baseline')}</span>
@@ -1087,16 +1094,17 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                 )}
               </div>
             </div>
+            )}
             <ul className="space-y-1 text-[12px] leading-relaxed text-slate-700">
               <li>• {L('매출', 'Revenue')} {signed(diagnosis.revYoY)} · {L('매출이익', 'Gross profit')} {signed(diagnosis.gpYoY)} · {L('이익률', 'Margin')} {diagnosis.m0?.toFixed(1) ?? '-'}% → {diagnosis.m1?.toFixed(1) ?? '-'}%</li>
-              {topRateOutliers.map((item) => (
+              {displayRateOutliers.map((item) => (
                 <li key={`rate-${item.item}`}>
                   • <span className="font-semibold text-amber-800">{cleanItem(item.item)} {L('원가율', 'cost ratio')}</span>:
                   {' '}{ratio(item.ratioCur)} · {selectedBaselineLabel} {L('대비', 'vs')} <b className={item.basisDeltaPp >= 0 ? 'text-red-600' : 'text-blue-600'}>{pp(item.basisDeltaPp)}</b>
                   {' · '}{L('금액', 'amount')} {money(item.prev)} → {money(item.cur)} {L('백만동', 'M dong')}
                 </li>
               ))}
-              {topCosts.map((item) => (
+              {displayTopCosts.map((item) => (
                 <li key={item.item}>
                   • {cleanItem(item.item)}: {money(item.prev)} → {money(item.cur)} {L('백만동', 'M dong')}
                   <b className={item.delta > 0 ? 'text-red-600' : 'text-blue-600'}> ({item.delta >= 0 ? '+' : ''}{money(item.delta)}, {signed(item.pct)})</b>
@@ -1105,14 +1113,14 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   {item.structural ? ` · ${L('반복 상승', 'repeated rise')} 🔧` : ''}
                 </li>
               ))}
-              {decreases.map((item) => (
+              {displayDecreases.map((item) => (
                 <li key={`drop-${item.item}`}>
                   • <span className="text-rose-700 font-semibold">⚠ {cleanItem(item.item)} {dropType(item, L)}</span>:
                   {' '}{money(item.prev)} → {money(item.cur)} {L('백만동', 'M dong')}
                   <b className="text-rose-600"> ({money(item.delta)}, {signed(item.pct)})</b>
                 </li>
               ))}
-              {[...warehouseAlerts, ...customerAlerts].slice(0, 5).map((alert) => (
+              {displayAlerts.map((alert) => (
                 <li key={`data-${alert.kind}-${alert.entity}-${alert.item}`}>
                   • <span className="text-rose-700 font-semibold">🚨 {alert.kind === 'warehouses' ? L('창고', 'Warehouse') : L('고객사', 'Customer')} {alert.entity}</span>
                   {' · '}{cleanItem(alert.item)}: {money(alert.prev)} → {money(alert.cur)} {L('백만동', 'M dong')}
@@ -1141,25 +1149,45 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                {priorityChecks.map((item, index) => (
-                  <div key={`priority-${item.id}`} className="rounded-md border border-white/70 bg-white/70 p-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold text-amber-700">#{index + 1}</span>
-                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.priority.className}`}>
-                        {item.confirmed ? L('확인 완료', 'Confirmed') : item.priority.label}
-                      </span>
-                      <b className="min-w-0 flex-1 truncate text-[11px] text-slate-700">{item.title}</b>
-                    </div>
-                    <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                      {item.evidence}
-                    </p>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-[11px]">
+                  <thead>
+                    <tr className="border-b border-amber-100 text-amber-700">
+                      <th className="py-1 pr-2 text-left font-medium">{L('순위', 'No.')}</th>
+                      <th className="py-1 px-2 text-left font-medium">{L('항목', 'Item')}</th>
+                      <th className="py-1 px-2 text-left font-medium">{L('구분', 'Flag')}</th>
+                      <th className="py-1 px-2 text-left font-medium">{L('핵심 근거', 'Key evidence')}</th>
+                      <th className="py-1 pl-2 text-right font-medium">{L('상태', 'Status')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {priorityChecks.map((item, index) => {
+                      const shortEvidence = item.evidence.split('.').slice(0, 1).join('.').replace(/입니다$/, '');
+                      return (
+                        <tr key={`priority-${item.id}`} className="border-b border-white/70 last:border-0">
+                          <td className="py-1 pr-2 font-bold text-amber-700">#{index + 1}</td>
+                          <td className="py-1 px-2 font-semibold text-slate-700">{item.title}</td>
+                          <td className="py-1 px-2">
+                            <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.priority.className}`}>
+                              {item.priority.label}
+                            </span>
+                          </td>
+                          <td className="py-1 px-2 text-slate-500">{shortEvidence}</td>
+                          <td className="py-1 pl-2 text-right">
+                            <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-amber-700'}`}>
+                              {item.confirmed ? L('확인 완료', 'Confirmed') : L('확인 필요', 'Check')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
 
+          {!isSummary && (
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <div className="text-[11px] font-semibold text-slate-500">
@@ -1296,7 +1324,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
                         {L('※ 고객사 원가는 운영 배부 기준 참고치이며 창고 합계와 다를 수 있습니다.', '※ Customer costs are allocated operational figures and may differ from warehouse totals.')}
                       </p>
                     )}
-                    {item.chartRows && (
+                    {isDetail && item.chartRows && (
                       <MiniRatioChart
                         rows={item.chartRows}
                         baseline={item.baselineRatio}
@@ -1321,8 +1349,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
               )}
             </div>
           </div>
-
-          {confirmedChecks.length > 0 && (
+          )}
+          {isDetail && confirmedChecks.length > 0 && (
             <div className="rounded-md border border-emerald-100 bg-emerald-50/70 p-2.5">
               <div className="text-[11px] font-semibold text-emerald-800 mb-1">
                 {L('5. 확인 반영 보고 메모', '5. Confirmed report notes')}
@@ -1337,7 +1365,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype }) {
             </div>
           )}
 
-          {notesHistory.length > 0 && (
+          {isDetail && notesHistory.length > 0 && (
             <div className="rounded-md border border-slate-200 bg-white/70 p-2.5">
               <div className="mb-1 text-[11px] font-semibold text-slate-600">
                 {L('6. 저장된 확인 사유 히스토리', '6. Saved confirmation history')}
