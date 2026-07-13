@@ -1,5 +1,6 @@
-import { BarChart2, Users, Warehouse, FileText, TrendingUp } from 'lucide-react';
+import { BarChart2, Users, Warehouse, FileText, TrendingUp, RefreshCw } from 'lucide-react';
 import { useLang } from '../context/LangContext';
+import { useVersionCheck, applyUpdate } from '../lib/useVersionCheck';
 
 const NAV_ITEMS = [
   { id: 'plan',      label: '경영계획',  icon: TrendingUp },
@@ -26,10 +27,31 @@ function LangToggle() {
 // (구)UnitToggle: 소비하는 화면이 없어 아무 효과가 없던 죽은 토글 — 제거(2026-07).
 // 단위는 화면별 고정: 경영계획=원화(억원/백만원), 창고·고객=동(억동/백만동).
 
+function UpdateBanner() {
+  const { lang } = useLang();
+  const updateReady = useVersionCheck();
+  if (!updateReady) return null;
+  return (
+    <div className="bg-emerald-600 text-white">
+      <div className="max-w-screen-xl mx-auto px-4 py-2 flex items-center justify-center gap-3 text-sm">
+        <RefreshCw className="w-4 h-4 shrink-0" />
+        <span className="font-medium">{lang === 'en' ? 'A new version is available.' : '새 버전이 있습니다.'}</span>
+        <button
+          onClick={applyUpdate}
+          className="ml-1 rounded-full bg-white text-emerald-700 font-bold px-3 py-1 text-xs hover:bg-emerald-50 transition-colors"
+        >
+          {lang === 'en' ? 'Update' : '업데이트'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Layout({ currentPage, onNavigate, children }) {
   const { t } = useLang();
   return (
     <div className="min-h-screen flex flex-col bg-slate-100">
+      <UpdateBanner />
       {/* 상단 헤더 */}
       <header className="bg-blue-800 text-white shadow-lg sticky top-0 z-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center justify-between">
