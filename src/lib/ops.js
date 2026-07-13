@@ -1,5 +1,5 @@
 // 창고별/고객사별 월별 실적·원가 셀렉터 + 운영 원가 이상탐지.
-// 원본 단위: 백만동. (1억동 = 100 백만동)
+// 원본 단위: mil VND(백만동). 표시: 매출·직접원가=bil VND(÷1000), 이익·원가항목=mil VND
 // 세그먼트: 창고/운송/FF/기타 (CL = 창고+운송). entity.data[seg]{revenue/.../items}.
 import raw from '../data/ops.json';
 
@@ -8,7 +8,7 @@ export const OPS_CURRENT = OPS_YEARS[OPS_YEARS.length - 1];
 export const COST_ITEMS = raw.costItems;
 const ACTUAL = { '2025': 12, '2026': 5 };
 export const opsActualCount = (y) => ACTUAL[y] ?? 12;
-export const EOKDONG = 100;                          // 1억동 = 100 백만동
+export const EOKDONG = 100;                          // 이상탐지 기준 변동액 = 100 mil VND
 const FIELDS = ['revenue', 'directCost', 'grossProfit', 'opProfit'];
 
 const sum = (a) => (a || []).reduce((x, v) => x + (v || 0), 0);

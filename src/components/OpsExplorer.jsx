@@ -8,7 +8,7 @@ import { useLang } from '../context/LangContext';
 const REGIONS = ['전체', '북부', '남부'];
 const CLFFS = ['전체', 'CL', 'FF', '기타'];
 const BIZS = ['전체', '운송', '창고'];
-const eok = (mn) => mn == null ? '-' : (mn / 100).toLocaleString('ko-KR', { maximumFractionDigits: 1 });
+const eok = (mn) => mn == null ? '-' : (mn / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 1 }); // bil VND
 const mn = (v) => v == null ? '-' : Math.round(v).toLocaleString('ko-KR');
 const pctTxt = (v) => v == null ? '-' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 const dcol = (v) => v == null ? 'text-slate-400' : v >= 0 ? 'text-blue-600' : 'text-red-500';
@@ -74,7 +74,7 @@ export default function OpsExplorer({ kind, groupNoun }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-slate-800">{t(groupNoun)} <span className="text-sm font-normal text-slate-400">{OPS_YEARS.join('·')}</span></h1>
-        <span className="text-xs text-slate-400">{OPS_CURRENT}년 {opsActualCount(OPS_CURRENT)}월까지 실적 · 매출 억동/원가 백만동</span>
+        <span className="text-xs text-slate-400">{OPS_CURRENT}년 {opsActualCount(OPS_CURRENT)}월까지 실적 · 매출 bil VND · 원가 mil VND</span>
       </div>
 
       {/* 필터: 지역 / 사업 / (CL일 때) 구분 */}
@@ -116,7 +116,7 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
       </div>
       {open && (
         <div className="mt-2 space-y-1">
-          {topAnoms.length === 0 && <div className="text-[12px] text-amber-700">1억동 이상 변동 없음.</div>}
+          {topAnoms.length === 0 && <div className="text-[12px] text-amber-700">100 mil VND 이상 변동 없음.</div>}
           {topAnoms.map((a, i) => (
             <button key={i} onClick={() => onPick(a.entity)}
               className="flex items-center gap-2 w-full text-left text-[12px] hover:bg-amber-100/60 rounded px-1.5 py-1">
@@ -128,7 +128,7 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
               <span className="text-slate-400 ml-auto tabular-nums shrink-0">{mn(a.prev)}→{mn(a.cur)}</span>
             </button>
           ))}
-          <div className="text-[10px] text-amber-600/80 pt-0.5">변동액 1억동(100백만동) 이상 + 전월비 ±{thr}% 이상. 클릭 → 해당 {groupNoun} 상세.</div>
+          <div className="text-[10px] text-amber-600/80 pt-0.5">변동액 100 mil VND 이상 + 전월비 ±{thr}% 이상. 클릭 → 해당 {groupNoun} 상세.</div>
         </div>
       )}
     </div>
@@ -159,8 +159,8 @@ function ProfitCard({ rows, groupNoun, onPick }) {
             <thead>
               <tr className="text-rose-400/80 text-[11px] border-b border-rose-100">
                 <th className="text-left font-medium px-2 py-1.5">{t(groupNoun)}</th>
-                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? 'Rev 억dong' : '매출 억동'}</th>
-                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? 'OP M dong' : '영업이익 백만동'}</th>
+                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? 'Rev bil VND' : '매출 bil VND'}</th>
+                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? 'OP mil VND' : '영업이익 mil VND'}</th>
                 <th className="text-right font-medium px-2 py-1.5">{lang === 'en' ? 'OP%' : '영업이익률'}</th>
                 <th className="text-right font-medium px-2 py-1.5">{lang === 'en' ? 'GP%' : '매출이익률'}</th>
               </tr>
@@ -194,10 +194,10 @@ function ListTable({ rows, anomalyCount, groupNoun, onPick }) {
           <thead>
             <tr className="text-slate-400 text-xs border-b border-slate-100">
               <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white">{t(groupNoun)}</th>
-              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출', 'Revenue')}<span className="block text-[8px] text-slate-300">{U('억동', '억dong')}</span></th>
+              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출', 'Revenue')}<span className="block text-[8px] text-slate-300">{U('bil VND', 'bil VND')}</span></th>
               <th className="text-right font-medium px-2.5 py-2">{U('전년비', 'YoY')}</th>
-              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('직접원가', 'Direct Cost')}<span className="block text-[8px] text-slate-300">{U('억동', '억dong')}</span></th>
-              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출이익', 'Gross Profit')}<span className="block text-[8px] text-slate-300">{U('백만동', 'M dong')}</span></th>
+              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('직접원가', 'Direct Cost')}<span className="block text-[8px] text-slate-300">{U('bil VND', 'bil VND')}</span></th>
+              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출이익', 'Gross Profit')}<span className="block text-[8px] text-slate-300">{U('mil VND', 'mil VND')}</span></th>
               <th className="text-right font-medium px-2.5 py-2">{U('이익률', 'Margin')}</th>
               <th className="text-center font-medium px-2 py-2">{U('점검', 'Check')}</th>
             </tr>
@@ -246,10 +246,10 @@ function Detail({ e, clff, biz, thr, groupNoun, onBack }) {
   const ranked = itemRanking(v, year);
 
   const PL = [
-    { k: 'revenue', label: '매출', f: eok, unit: '억동', bold: true },
-    { k: 'directCost', label: '직접원가', f: eok, unit: '억동' },
-    { k: 'grossProfit', label: '매출이익', f: mn, unit: '백만동' },
-    { k: 'opProfit', label: '영업이익', f: mn, unit: '백만동', bold: true },
+    { k: 'revenue', label: '매출', f: eok, unit: 'bil', bold: true },
+    { k: 'directCost', label: '직접원가', f: eok, unit: 'bil' },
+    { k: 'grossProfit', label: '매출이익', f: mn, unit: 'mil' },
+    { k: 'opProfit', label: '영업이익', f: mn, unit: 'mil', bold: true },
   ];
   const months = Array.from({ length: 12 }, (_, i) => i);
   const segAvail = clff === 'CL';
@@ -303,12 +303,12 @@ function Detail({ e, clff, biz, thr, groupNoun, onBack }) {
         </div>
       </Card>
 
-      <Card title="원가 항목 월별 모니터" hint={`${year}년 · 빨강=급증 파랑=급감 (1억동↑ ±${thr}%)`}>
+      <Card title="원가 항목 월별 모니터" hint={`${year}년 · 빨강=급증 파랑=급감 (100 mil↑ ±${thr}%)`}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="text-sm min-w-full">
             <thead>
               <tr className="text-slate-400 text-xs border-b border-slate-100">
-                <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white whitespace-nowrap">원가 항목<span className="block text-[9px] text-slate-300">백만동</span></th>
+                <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white whitespace-nowrap">원가 항목<span className="block text-[9px] text-slate-300">mil VND</span></th>
                 {months.map((i) => <th key={i} className={`text-right font-medium px-2 py-2 ${i >= n ? 'text-slate-200' : ''}`}>{i + 1}월</th>)}
                 <th className="text-right font-medium px-2.5 py-2 bg-slate-50">YTD</th>
               </tr>
@@ -339,7 +339,7 @@ function Detail({ e, clff, biz, thr, groupNoun, onBack }) {
             </tbody>
           </table>
         </div>
-        <div className="text-[10px] text-slate-400 mt-1.5">큰 항목 순 · 셀 색칠 = 전월비 ±{thr}% 이상이며 변동액 1억동 초과 → 운영팀 점검 대상</div>
+        <div className="text-[10px] text-slate-400 mt-1.5">큰 항목 순 · 셀 색칠 = 전월비 ±{thr}% 이상이며 변동액 100 mil VND 초과 → 운영팀 점검 대상</div>
       </Card>
     </div>
   );

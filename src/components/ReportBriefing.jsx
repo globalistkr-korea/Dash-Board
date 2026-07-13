@@ -51,7 +51,7 @@ const contributionText = (rows, L, direction = 'increase') => rows.map((row) => 
   const shareLabel = direction === 'increase' ? L('증가 대상 내', 'share among increases') : L('감소 대상 내', 'share among decreases');
   const share = row.share != null ? `, ${shareLabel} ${row.share.toFixed(0)}%` : '';
   const rate = row.ratioDeltaPp != null ? `, ${L('원가율', 'cost ratio')} ${ratio(row.ratioPrev)}→${ratio(row.ratioCur)}(${pp(row.ratioDeltaPp)})` : '';
-  return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
+  return `${row.name} ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L(' mil VND', ' mil VND')} (${money(row.prev)}→${money(row.cur)}${rate})${share}`;
 }).join(' · ');
 
 const topContributor = (rows = []) => rows.reduce((top, row) => {
@@ -361,7 +361,7 @@ function MiniRatioChart({ rows = [], baseline, thresholdPp, item, L }) {
                 </tbody>
               </table>
               <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
-                {L('※ 금액은 운영 데이터 기준 백만동입니다. 원가율은 원가÷매출로 계산됩니다.', '※ Amounts are ops data in M dong. Cost ratio = cost ÷ revenue.')}
+                {L('※ 금액은 운영 데이터 기준 mil VND입니다. 원가율은 원가÷매출로 계산됩니다.', '※ Amounts are ops data in mil VND. Cost ratio = cost ÷ revenue.')}
               </p>
             </div>
           </div>
@@ -696,8 +696,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       delta: item.delta,
       title: L(`${cleanItem(item.item)} 증가 사유`, `${cleanItem(item.item)} increase`),
       evidence: L(
-        `${money(item.prev)} → ${money(item.cur)}백만동, ${money(item.delta)}백만동 증가 (${signed(item.pct)}). 매출 대비 원가율은 ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)})이고, ${curAvgLabel} ${ratio(item.avgRatioCurYtd)} 대비 ${pp(item.avgDeltaPp)}입니다. ${item.structural ? '여러 달 반복되어 구조적 가능성이 있습니다.' : '특정 기간 집중 여부를 확인해야 합니다.'}`,
-        `${money(item.prev)} → ${money(item.cur)} M dong, up ${money(item.delta)} (${signed(item.pct)}). Cost ratio moved ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)}), ${pp(item.avgDeltaPp)} vs the 2026 YTD average ${ratio(item.avgRatioCurYtd)}. ${item.structural ? 'Repeated across months; potentially structural.' : 'Check whether the increase is period-specific.'}`,
+        `${money(item.prev)} → ${money(item.cur)} mil VND, ${money(item.delta)} mil VND 증가 (${signed(item.pct)}). 매출 대비 원가율은 ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)})이고, ${curAvgLabel} ${ratio(item.avgRatioCurYtd)} 대비 ${pp(item.avgDeltaPp)}입니다. ${item.structural ? '여러 달 반복되어 구조적 가능성이 있습니다.' : '특정 기간 집중 여부를 확인해야 합니다.'}`,
+        `${money(item.prev)} → ${money(item.cur)} mil VND, up ${money(item.delta)} (${signed(item.pct)}). Cost ratio moved ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)}), ${pp(item.avgDeltaPp)} vs the 2026 YTD average ${ratio(item.avgRatioCurYtd)}. ${item.structural ? 'Repeated across months; potentially structural.' : 'Check whether the increase is period-specific.'}`,
       ),
       warehouseDetail: warehouseDrivers.length
         ? contributionText(warehouseDrivers, L)
@@ -733,8 +733,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       delta: item.delta,
       title: L(`${cleanItem(item.item)} 원가율 이탈`, `${cleanItem(item.item)} cost-ratio deviation`),
       evidence: L(
-        `금액은 ${money(item.prev)} → ${money(item.cur)}백만동(${item.delta >= 0 ? '+' : ''}${money(item.delta)})이고, 매출 대비 원가율은 ${ratio(item.ratioCur)}입니다. 선택 기준선 ${selectedBaselineLabel} ${ratio(item.baselineRatio)} 대비 ${pp(item.basisDeltaPp)}로, 임계값 ${item.thresholdPp}%p를 벗어났습니다. 참고로 ${curAvgLabel} 대비 ${pp(item.avgDeltaPp)}, ${prevAvgLabel} 대비 ${pp(item.prevAvgDeltaPp)}입니다.`,
-        `Amount moved ${money(item.prev)} → ${money(item.cur)} M dong (${item.delta >= 0 ? '+' : ''}${money(item.delta)}), and the cost ratio is ${ratio(item.ratioCur)}. It is ${pp(item.basisDeltaPp)} vs the selected baseline ${selectedBaselineLabel} ${ratio(item.baselineRatio)}, beyond the ${item.thresholdPp}pp threshold. For reference: ${pp(item.avgDeltaPp)} vs 2026 YTD and ${pp(item.prevAvgDeltaPp)} vs 2025 same-period.`,
+        `금액은 ${money(item.prev)} → ${money(item.cur)} mil VND(${item.delta >= 0 ? '+' : ''}${money(item.delta)})이고, 매출 대비 원가율은 ${ratio(item.ratioCur)}입니다. 선택 기준선 ${selectedBaselineLabel} ${ratio(item.baselineRatio)} 대비 ${pp(item.basisDeltaPp)}로, 임계값 ${item.thresholdPp}%p를 벗어났습니다. 참고로 ${curAvgLabel} 대비 ${pp(item.avgDeltaPp)}, ${prevAvgLabel} 대비 ${pp(item.prevAvgDeltaPp)}입니다.`,
+        `Amount moved ${money(item.prev)} → ${money(item.cur)} mil VND (${item.delta >= 0 ? '+' : ''}${money(item.delta)}), and the cost ratio is ${ratio(item.ratioCur)}. It is ${pp(item.basisDeltaPp)} vs the selected baseline ${selectedBaselineLabel} ${ratio(item.baselineRatio)}, beyond the ${item.thresholdPp}pp threshold. For reference: ${pp(item.avgDeltaPp)} vs 2026 YTD and ${pp(item.prevAvgDeltaPp)} vs 2025 same-period.`,
       ),
       chartRows: baseline === 'recent3' ? item.ratioTrend3 : item.ratioTrend5,
       baselineRatio: item.baselineRatio,
@@ -770,8 +770,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       delta: item.delta,
       title: `${cleanItem(item.item)} · ${dropType(item, L)}`,
       evidence: L(
-        `${money(item.prev)} → ${money(item.cur)}백만동, ${money(Math.abs(item.delta))}백만동 감소 (${signed(item.pct)}). 실제 절감일 수도 있지만 미기입·자릿수·계정 변경 가능성을 먼저 확인해야 합니다.`,
-        `${money(item.prev)} → ${money(item.cur)} M dong, down ${money(Math.abs(item.delta))} (${signed(item.pct)}). This may be a real saving, but first verify omission, digit error, or account change.`,
+        `${money(item.prev)} → ${money(item.cur)} mil VND, ${money(Math.abs(item.delta))} mil VND 감소 (${signed(item.pct)}). 실제 절감일 수도 있지만 미기입·자릿수·계정 변경 가능성을 먼저 확인해야 합니다.`,
+        `${money(item.prev)} → ${money(item.cur)} mil VND, down ${money(Math.abs(item.delta))} (${signed(item.pct)}). This may be a real saving, but first verify omission, digit error, or account change.`,
       ),
       warehouseDetail: warehouseDrivers.length
         ? contributionText(warehouseDrivers, L, 'decrease')
@@ -782,8 +782,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       warehouseRows: warehouseDrivers,
       customerRows: customerDrivers,
       question: L(
-        `${targets || '해당 원가 담당자'}에게 ① 원본 전표·시트가 실제 ${money(item.cur)}백만동인지 ② 0 또는 소수점·자릿수 오입력인지 ③ 비용 누락·익월 이월인지 ④ 다른 계정으로 재분류됐는지 ⑤ 실제 물량·작업시간 감소인지 확인해 주세요.`,
-        `Ask ${targets || 'the cost owner'} to verify: ① source voucher/sheet value ${money(item.cur)} M dong, ② zero/decimal/digit error, ③ omitted or deferred cost, ④ account reclassification, and ⑤ actual volume/work-hour decline.`,
+        `${targets || '해당 원가 담당자'}에게 ① 원본 전표·시트가 실제 ${money(item.cur)} mil VND인지 ② 0 또는 소수점·자릿수 오입력인지 ③ 비용 누락·익월 이월인지 ④ 다른 계정으로 재분류됐는지 ⑤ 실제 물량·작업시간 감소인지 확인해 주세요.`,
+        `Ask ${targets || 'the cost owner'} to verify: ① source voucher/sheet value ${money(item.cur)} mil VND, ② zero/decimal/digit error, ③ omitted or deferred cost, ④ account reclassification, and ⑤ actual volume/work-hour decline.`,
       ),
     };
   });
@@ -797,12 +797,12 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       topCustomer: alert.kind === 'customers' ? alert.entity : '-',
       title: `${targetType} ${alert.entity} · ${cleanItem(alert.item)} · ${alertType(alert, L)}`,
       evidence: L(
-        `${money(alert.prev)} → ${money(alert.cur)}백만동 (${signed(alert.pct)}). 전체 합계에서 다른 대상의 증가와 상쇄되더라도 개별 입력값은 별도 점검이 필요합니다.`,
-        `${money(alert.prev)} → ${money(alert.cur)} M dong (${signed(alert.pct)}). This individual value needs review even if offset by increases elsewhere.`,
+        `${money(alert.prev)} → ${money(alert.cur)} mil VND (${signed(alert.pct)}). 전체 합계에서 다른 대상의 증가와 상쇄되더라도 개별 입력값은 별도 점검이 필요합니다.`,
+        `${money(alert.prev)} → ${money(alert.cur)} mil VND (${signed(alert.pct)}). This individual value needs review even if offset by increases elsewhere.`,
       ),
       question: L(
-        `${alert.entity} 담당자에게 원본 시트·전표의 ${cleanItem(alert.item)} 값이 실제 ${money(alert.cur)}백만동인지 확인해 주세요. 0/누락, 소수점·자릿수 오류, 익월 이월, 계정 변경, 실제 운영량 감소 중 어느 경우인가요?`,
-        `Ask the ${alert.entity} owner to verify whether ${cleanItem(alert.item)} is truly ${money(alert.cur)} M dong. Is it zero/omitted, decimal or digit error, deferred, reclassified, or an actual operational decline?`,
+        `${alert.entity} 담당자에게 원본 시트·전표의 ${cleanItem(alert.item)} 값이 실제 ${money(alert.cur)} mil VND인지 확인해 주세요. 0/누락, 소수점·자릿수 오류, 익월 이월, 계정 변경, 실제 운영량 감소 중 어느 경우인가요?`,
+        `Ask the ${alert.entity} owner to verify whether ${cleanItem(alert.item)} is truly ${money(alert.cur)} mil VND. Is it zero/omitted, decimal or digit error, deferred, reclassified, or an actual operational decline?`,
       ),
     };
   });
@@ -818,8 +818,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       topCustomer: '-',
       title: L(`${worstWarehouse.name} 이익 악화`, `${worstWarehouse.name} profit decline`),
       evidence: L(
-        `매출이익 ${money(worstWarehouse.gpDelta)}백만동 변동, 매출 ${signed(worstWarehouse.revPct)}, 마진 ${worstWarehouse.marginPp == null ? '-' : `${worstWarehouse.marginPp.toFixed(1)}%p`}.`,
-        `Gross profit ${money(worstWarehouse.gpDelta)} M dong, revenue ${signed(worstWarehouse.revPct)}, margin ${worstWarehouse.marginPp == null ? '-' : `${worstWarehouse.marginPp.toFixed(1)}pp`}.`,
+        `매출이익 ${money(worstWarehouse.gpDelta)} mil VND 변동, 매출 ${signed(worstWarehouse.revPct)}, 마진 ${worstWarehouse.marginPp == null ? '-' : `${worstWarehouse.marginPp.toFixed(1)}%p`}.`,
+        `Gross profit ${money(worstWarehouse.gpDelta)} mil VND, revenue ${signed(worstWarehouse.revPct)}, margin ${worstWarehouse.marginPp == null ? '-' : `${worstWarehouse.marginPp.toFixed(1)}pp`}.`,
       ),
       question: L(
         '계약 조건, 운영 차질, 고객 물량 또는 비용 배부 변경이 있었나요?',
@@ -833,8 +833,8 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       topCustomer: worstCustomer.name,
       title: L(`${worstCustomer.name} 고객 영향`, `${worstCustomer.name} customer impact`),
       evidence: L(
-        `매출이익 ${money(worstCustomer.gpDelta)}백만동 변동, 매출 ${signed(worstCustomer.revPct)}.`,
-        `Gross profit ${money(worstCustomer.gpDelta)} M dong, revenue ${signed(worstCustomer.revPct)}.`,
+        `매출이익 ${money(worstCustomer.gpDelta)} mil VND 변동, 매출 ${signed(worstCustomer.revPct)}.`,
+        `Gross profit ${money(worstCustomer.gpDelta)} mil VND, revenue ${signed(worstCustomer.revPct)}.`,
       ),
       question: L(
         '물량 감소·단가 변경·계약 종료 또는 일회성 이슈가 있었나요?',
@@ -951,7 +951,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     const common = [
       `${kindLabel}: ${row.name}`,
       `${L('판정', 'Flag')}: ${verdict.label}`,
-      `${L('증감액', 'Delta')}: ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L('백만동', ' M dong')} (${money(row.prev)}→${money(row.cur)})`,
+      `${L('증감액', 'Delta')}: ${row.delta >= 0 ? '+' : ''}${money(row.delta)}${L(' mil VND', ' mil VND')} (${money(row.prev)}→${money(row.cur)})`,
       row.ratioDeltaPp != null
         ? `${L('원가율', 'Cost ratio')}: ${ratio(row.ratioPrev)}→${ratio(row.ratioCur)} (${pp(row.ratioDeltaPp)})`
         : '',
@@ -994,7 +994,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     const text = [
       copyMode === 'report' ? '[보고용] 오늘 우선 확인 TOP 5' : '[확인 요청] 오늘 우선 확인 TOP 5',
       ...priorityChecks.map((item, index) => {
-        const impactText = item.impact > 0 ? `${money(item.impact)}${L('백만동', ' M dong')}` : '-';
+        const impactText = item.impact > 0 ? `${money(item.impact)}${L(' mil VND', ' mil VND')}` : '-';
         const statusText = item.confirmed ? L('확인 완료', 'Confirmed') : item.priority.label;
         if (copyMode === 'owner') {
           return [
@@ -1152,12 +1152,12 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
                 <li key={`rate-${item.item}`}>
                   • <span className="font-semibold text-amber-800">{cleanItem(item.item)} {L('원가율', 'cost ratio')}</span>:
                   {' '}{ratio(item.ratioCur)} · {selectedBaselineLabel} {L('대비', 'vs')} <b className={item.basisDeltaPp >= 0 ? 'text-red-600' : 'text-blue-600'}>{pp(item.basisDeltaPp)}</b>
-                  {' · '}{L('금액', 'amount')} {money(item.prev)} → {money(item.cur)} {L('백만동', 'M dong')}
+                  {' · '}{L('금액', 'amount')} {money(item.prev)} → {money(item.cur)} {L(' mil VND', 'mil VND')}
                 </li>
               ))}
               {displayTopCosts.map((item) => (
                 <li key={item.item}>
-                  • {cleanItem(item.item)}: {money(item.prev)} → {money(item.cur)} {L('백만동', 'M dong')}
+                  • {cleanItem(item.item)}: {money(item.prev)} → {money(item.cur)} {L(' mil VND', 'mil VND')}
                   <b className={item.delta > 0 ? 'text-red-600' : 'text-blue-600'}> ({item.delta >= 0 ? '+' : ''}{money(item.delta)}, {signed(item.pct)})</b>
                   {item.ratioCur != null && ` · ${L('원가율', 'cost ratio')} ${ratio(item.ratioCur)} (${L('평균 대비', 'vs avg')} ${pp(item.avgDeltaPp)})`}
                   {totalIncrease > 0 && ` · ${L('전체 증가분 영향', 'share of increase')} ${(item.delta / totalIncrease * 100).toFixed(0)}%`}
@@ -1167,14 +1167,14 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
               {displayDecreases.map((item) => (
                 <li key={`drop-${item.item}`}>
                   • <span className="text-rose-700 font-semibold">⚠ {cleanItem(item.item)} {dropType(item, L)}</span>:
-                  {' '}{money(item.prev)} → {money(item.cur)} {L('백만동', 'M dong')}
+                  {' '}{money(item.prev)} → {money(item.cur)} {L(' mil VND', 'mil VND')}
                   <b className="text-rose-600"> ({money(item.delta)}, {signed(item.pct)})</b>
                 </li>
               ))}
               {displayAlerts.map((alert) => (
                 <li key={`data-${alert.kind}-${alert.entity}-${alert.item}`}>
                   • <span className="text-rose-700 font-semibold">🚨 {alert.kind === 'warehouses' ? L('창고', 'Warehouse') : L('고객사', 'Customer')} {alert.entity}</span>
-                  {' · '}{cleanItem(alert.item)}: {money(alert.prev)} → {money(alert.cur)} {L('백만동', 'M dong')}
+                  {' · '}{cleanItem(alert.item)}: {money(alert.prev)} → {money(alert.cur)} {L(' mil VND', 'mil VND')}
                   {' · '}<b className="text-rose-600">{alertType(alert, L)}</b>
                 </li>
               ))}
@@ -1209,7 +1209,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
                       <th className="py-1 px-2 text-left font-medium">{L('구분', 'Flag')}</th>
                       <th className="py-1 px-2 text-right font-medium">
                         {L('영향액', 'Impact')}
-                        <span className="block text-[9px] font-normal opacity-70">{L('백만동', 'M dong')}</span>
+                        <span className="block text-[9px] font-normal opacity-70">{L(' mil VND', 'mil VND')}</span>
                       </th>
                       <th className="py-1 px-2 text-left font-medium">{L('대표 창고', 'Top warehouse')}</th>
                       <th className="py-1 px-2 text-left font-medium">{L('대표 고객사', 'Top customer')}</th>
