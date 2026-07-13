@@ -6,7 +6,22 @@ import raw from '../data/ops.json';
 export const OPS_YEARS = raw.years;                 // ['2025','2026']
 export const OPS_CURRENT = OPS_YEARS[OPS_YEARS.length - 1];
 export const COST_ITEMS = raw.costItems;
-const ACTUAL = { '2025': 12, '2026': 5 };
+
+// 실적 개월 수를 데이터에서 자동 감지: 매출이 0이 아닌 마지막 월(미래월은 전부 0).
+// 6월 데이터가 쌓이면 자동으로 6이 됨 — 하드코딩 불필요.
+function detectActualMonths(year) {
+  let last = 0;
+  for (const kind of ['warehouses', 'customers']) {
+    for (const e of Object.values(raw[kind] || {})) {
+      for (const seg of Object.values(e.data || {})) {
+        const s = seg.revenue?.[year] || [];
+        for (let i = 0; i < 12; i++) if (s[i]) last = Math.max(last, i + 1);
+      }
+    }
+  }
+  return last || 12;
+}
+const ACTUAL = Object.fromEntries(OPS_YEARS.map((y) => [y, detectActualMonths(y)]));
 export const opsActualCount = (y) => ACTUAL[y] ?? 12;
 export const EOKDONG = 100;                          // 이상탐지 기준 변동액 = 100 mil VND
 const FIELDS = ['revenue', 'directCost', 'grossProfit', 'opProfit'];

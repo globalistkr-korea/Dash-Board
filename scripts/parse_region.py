@@ -21,7 +21,10 @@ TABS = {
     "2025": "1.3 25년 (지역)",
     "2026": "1.1.1 경영실적계획(26년,지역)",
 }
-ACTUAL_MONTHS = {"2024": 12, "2025": 12, "2026": 5}  # 실적 개월 수(나머지는 계획)
+ACTUAL_MONTHS = {"2024": 12, "2025": 12, "2026": 5}  # 자동감지 실패 시 폴백
+# 시트 헤더 월별 타입 마커: 결산/실적/확정=실적, 가마감/가결산/계획=미확정
+ACTUAL_MARKERS = {"결산", "실적", "확정"}
+PLAN_MARKERS = {"가마감", "가결산", "계획", "전망", "예상", "미마감"}
 # 3개년 모두 깔끔히 집계되는 손익 항목만 파싱(판관비는 앱에서 매출이익-영업이익으로 도출)
 METRICS = ["매출", "매출원가", "매출이익", "영업이익"]
 ALL_HEADERS = {"매출", "매출원가", "매출이익", "전체 판매비", "법인 판매비",
@@ -51,6 +54,26 @@ def num(v):
 
 def months(row):
     return [num(g(row, 13 + k)) for k in range(12)]
+
+
+def detect_actual_months(rows, fallback=12):
+    """헤더의 월별 타입 마커(결산/실적 vs 가마감)를 세어 '실적 확정' 개월 수를 자동 감지.
+    앞에서부터 연속된 실적 마커만 카운트 → 6월 데이터가 결산되면 자동으로 6 반환."""
+    for r in range(min(6, len(rows))):
+        markers = []
+        for k in range(12):
+            v = g(rows[r], 13 + k)
+            markers.append(str(v).strip() if v is not None else "")
+        typed = sum(1 for m in markers if m in ACTUAL_MARKERS or m in PLAN_MARKERS)
+        if typed >= 5:                       # 이 행이 월별 타입 마커 행
+            cnt = 0
+            for m in markers:
+                if m in ACTUAL_MARKERS:
+                    cnt += 1
+                else:
+                    break                    # 앞에서부터 연속 실적만
+            return cnt
+    return fallback
 
 
 COUNTRIES = {"인도", "베트남", "중국", "말레이시아", "인도네시아", "태국",
@@ -143,12 +166,14 @@ def parse_vietnam(rows, start, end):
 
 def main():
     wb = openpyxl.load_workbook(XLSX, read_only=True, data_only=True)
+    actual_months = {}
     out = {"unit": "백만원", "years": list(TABS.keys()),
-           "actualMonths": ACTUAL_MONTHS, "data": {}}
+           "actualMonths": actual_months, "data": {}}
     for year, tab in TABS.items():
         ws = wb[tab]
         rows = list(ws.iter_rows(values_only=True))
-        
+        actual_months[year] = detect_actual_months(rows, ACTUAL_MONTHS.get(year, 12))
+
         blocks = find_metric_blocks(rows)
         bmap = {name: (s, e) for name, s, e in blocks}
         ydata = {}
