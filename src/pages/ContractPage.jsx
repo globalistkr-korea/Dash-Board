@@ -45,6 +45,7 @@ export default function ContractPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-bold text-slate-800">{t('계약 정보')}</h1>
+      <p className="text-xs text-amber-700">계약자료는 이전 원본을 유지합니다. 새 Customer PNL 시트에는 계약 정보가 포함되어 있지 않습니다.</p>
 
       <div className="flex gap-1.5">
         {TABS.map((tb) => (

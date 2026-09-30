@@ -4,3 +4,5 @@ dist
 .env.local
 .firebase
 .claude/settings.local.json
+source-archives/
+firebase-debug.log

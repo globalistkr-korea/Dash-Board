@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import {
-  OPS_YEARS, OPS_CURRENT, opsActualCount,
+  OPS_YEARS, OPS_CURRENT, opsActualCount, OPS_SOURCE,
   opsList, opsGet, view, annualOf, ytdOf, yoyOf, anomaliesOf, allAnomalies, itemRanking,
 } from '../lib/ops';
 import { useLang } from '../context/LangContext';
 
-const REGIONS = ['전체', '북부', '남부'];
+const REGIONS = ['전체', '북부', '남부', '미지정'];
 const CLFFS = ['전체', 'CL', 'FF', '기타'];
 const BIZS = ['전체', '운송', '창고'];
 const eok = (mn) => mn == null ? '-' : (mn / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 1 }); // bil VND
@@ -44,6 +44,8 @@ function Card({ title, hint, children }) {
 
 export default function OpsExplorer({ kind, groupNoun }) {
   const { t } = useLang();
+  const [year, setYear] = useState(OPS_CURRENT);
+  const changeYear = (y) => { setYear(y); setSel(null); if (Number(y) <= 2024) setRegion('전체'); };
   const [region, setRegion] = useState('북부');   // 북부 담당자 기본
   const [clff, setClff] = useState('전체');
   const [biz, setBiz] = useState('전체');
@@ -56,17 +58,18 @@ export default function OpsExplorer({ kind, groupNoun }) {
   // 엔티티 + 뷰 (필터 반영) , 매출순 정렬
   const rows = useMemo(() => opsList(kind, region, clff)
     .map((e) => ({ e, v: view(e, clff, biz) }))
-    .sort((a, b) => annualOf(b.v, 'revenue', OPS_CURRENT) - annualOf(a.v, 'revenue', OPS_CURRENT)),
-    [kind, region, clff, biz]);
+    .filter(({ v }) => ['revenue', 'directCost', 'grossProfit', 'opProfit'].some(f => (v[f]?.[year] || []).some(x => x !== 0)))
+    .sort((a, b) => annualOf(b.v, 'revenue', year) - annualOf(a.v, 'revenue', year)),
+    [kind, region, clff, biz, year]);
 
   const anomalyCount = useMemo(() => {
     const map = {};
-    for (const { e, v } of rows) map[e.name] = anomaliesOf(v, { threshold: thr / 100 }).length;
+    for (const { e, v } of rows) map[e.name] = anomaliesOf(v, { threshold: thr / 100 }).filter(a => a.year === year).length;
     return map;
-  }, [rows, thr]);
+  }, [rows, thr, year]);
   const topAnoms = useMemo(
-    () => allAnomalies(kind, region, clff, biz, { threshold: thr / 100 }).slice(0, 8),
-    [kind, region, clff, biz, thr]);
+    () => allAnomalies(kind, region, clff, biz, { threshold: thr / 100 }).filter(a => a.year === year).slice(0, 8),
+    [kind, region, clff, biz, thr, year]);
 
   const selEntity = sel ? opsGet(kind, sel) : null;
 
@@ -74,9 +77,11 @@ export default function OpsExplorer({ kind, groupNoun }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-slate-800">{t(groupNoun)} <span className="text-sm font-normal text-slate-400">{OPS_YEARS.join('·')}</span></h1>
-        <span className="text-xs text-slate-400">{OPS_CURRENT}년 {opsActualCount(OPS_CURRENT)}월까지 실적 · 매출 bil VND · 원가 mil VND</span>
+        <span className="text-xs text-slate-400">{year}년 {opsActualCount(year)}월까지 실적 · 매출 bil VND · 원가 mil VND</span>
       </div>
 
+      <div className="flex gap-1.5 flex-wrap">{OPS_YEARS.map(y => <Chip key={y} active={year === y} onClick={() => changeYear(y)}>{y}년</Chip>)}</div>
+      {Number(year) <= 2024 && <p className="text-xs text-amber-700">지역·세부 사업 구분이 누락된 연도입니다. 전체 기준으로 조회합니다.</p>}
       {/* 필터: 지역 / 사업 / (CL일 때) 구분 */}
       <div className="space-y-1.5 text-xs">
         <div className="flex items-center gap-2 flex-wrap"><FLabel ko="지역" />
@@ -89,15 +94,16 @@ export default function OpsExplorer({ kind, groupNoun }) {
         )}
       </div>
       <div className="text-[11px] text-slate-400">현재 보기: <b className="text-slate-600">{scope}</b></div>
+      <p className="text-[11px] text-slate-500">급증·0원 전환에는 창고·고객 명칭 변경이나 비용 이관도 포함될 수 있습니다. 실제 누락 여부는 원본 확인이 필요합니다.</p>
 
       <OpsAlertCard topAnoms={topAnoms} thr={thr} setThr={setThr} onPick={setSel} groupNoun={groupNoun} />
-      <ProfitCard rows={rows} groupNoun={groupNoun} onPick={setSel} />
+      <ProfitCard year={year} rows={rows} groupNoun={groupNoun} onPick={setSel} />
 
       {!selEntity
-        ? <ListTable rows={rows} anomalyCount={anomalyCount} groupNoun={groupNoun} onPick={setSel} />
-        : <Detail e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} />}
+        ? <ListTable year={year} rows={rows} anomalyCount={anomalyCount} groupNoun={groupNoun} onPick={setSel} />
+        : <Detail year={year} setYear={changeYear} e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} />}
 
-      <p className="text-[11px] text-slate-400 text-center">출처: 구글시트 ‘대쉬보드’ 2.창고별 raw · 참고용, 원본과 교차확인 권장</p>
+      <p className="text-[11px] text-slate-400 text-center">출처: {OPS_SOURCE?.title} · 2023·2024년 지역·세부 사업 미지정 · 참고용, 원본과 교차확인 권장</p>
     </div>
   );
 }
@@ -136,13 +142,13 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
 }
 
 /* 수익성 점검 — 적자/저마진 Top (현재 필터 기준) */
-function ProfitCard({ rows, groupNoun, onPick }) {
+function ProfitCard({ year, rows, groupNoun, onPick }) {
   const { t, lang } = useLang();
   const [open, setOpen] = useState(true);
   const ranked = rows.map(({ e, v }) => {
-    const rev = annualOf(v, 'revenue', OPS_CURRENT);
-    const op = annualOf(v, 'opProfit', OPS_CURRENT);
-    const gp = annualOf(v, 'grossProfit', OPS_CURRENT);
+    const rev = annualOf(v, 'revenue', year);
+    const op = annualOf(v, 'opProfit', year);
+    const gp = annualOf(v, 'grossProfit', year);
     return { name: e.name, region: e.region, rev, op, opM: rev ? (op / rev) * 100 : null, gpM: rev ? (gp / rev) * 100 : null };
   }).filter((x) => x.rev > 0)
     .sort((a, b) => a.opM - b.opM)            // 영업이익률 낮은 순
@@ -184,11 +190,11 @@ function ProfitCard({ rows, groupNoun, onPick }) {
   );
 }
 
-function ListTable({ rows, anomalyCount, groupNoun, onPick }) {
+function ListTable({ year, rows, anomalyCount, groupNoun, onPick }) {
   const { t, lang } = useLang();
   const U = (ko, en) => (lang === 'en' ? en : ko);
   return (
-    <Card title={`${t(groupNoun)} · ${OPS_CURRENT}`} hint={`${rows.length} · ${OPS_CURRENT}`}>
+    <Card title={`${t(groupNoun)} · ${year}`} hint={`${rows.length} · ${year}`}>
       <div className="overflow-x-auto scrollbar-thin">
         <table className="w-full text-sm">
           <thead>
@@ -204,11 +210,11 @@ function ListTable({ rows, anomalyCount, groupNoun, onPick }) {
           </thead>
           <tbody>
             {rows.map(({ e, v }) => {
-              const rev = annualOf(v, 'revenue', OPS_CURRENT);
-              const dc = annualOf(v, 'directCost', OPS_CURRENT);
-              const gp = annualOf(v, 'grossProfit', OPS_CURRENT);
+              const rev = annualOf(v, 'revenue', year);
+              const dc = annualOf(v, 'directCost', year);
+              const gp = annualOf(v, 'grossProfit', year);
               const mgn = rev ? (gp / rev) * 100 : null;
-              const yv = yoyOf(v, 'revenue');
+              const yv = yoyOf(v, 'revenue', year);
               const ac = anomalyCount[e.name] || 0;
               return (
                 <tr key={e.name} onClick={() => onPick(e.name)}
@@ -232,9 +238,8 @@ function ListTable({ rows, anomalyCount, groupNoun, onPick }) {
   );
 }
 
-function Detail({ e, clff, biz, thr, groupNoun, onBack }) {
+function Detail({ year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
   const { t } = useLang();
-  const [year, setYear] = useState(OPS_CURRENT);
   const [bizD, setBizD] = useState(biz);   // 상세 내 운송/창고 재선택
   const v = useMemo(() => view(e, clff === 'FF' ? 'FF' : clff, clff === 'CL' ? bizD : '전체'), [e, clff, bizD]);
   const n = opsActualCount(year);
@@ -248,6 +253,8 @@ function Detail({ e, clff, biz, thr, groupNoun, onBack }) {
   const PL = [
     { k: 'revenue', label: '매출', f: eok, unit: 'bil', bold: true },
     { k: 'directCost', label: '직접원가', f: eok, unit: 'bil' },
+    { k: 'directProfit', label: '직접이익', f: mn, unit: 'mil' },
+    { k: 'indirectCost', label: '간접원가', f: mn, unit: 'mil' },
     { k: 'grossProfit', label: '매출이익', f: mn, unit: 'mil' },
     { k: 'opProfit', label: '영업이익', f: mn, unit: 'mil', bold: true },
   ];

@@ -3,7 +3,7 @@ import { useLang } from '../context/LangContext';
 import { useVersionCheck, applyUpdate } from '../lib/useVersionCheck';
 
 const NAV_ITEMS = [
-  { id: 'plan',      label: '경영계획',  icon: TrendingUp },
+  { id: 'plan',      label: '경영실적',  icon: TrendingUp },
   { id: 'warehouse', label: '창고별',    icon: Warehouse  },
   { id: 'customer',  label: '고객사별',  icon: Users      },
   { id: 'contract',  label: '계약',      icon: FileText   },

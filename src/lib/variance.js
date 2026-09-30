@@ -11,10 +11,10 @@ export const CUR_MONTH_NO = N;                             // 당월(1-base)
 export const PREV_MONTH_NO = N - 1;                        // 전월(1-base)
 
 // 비교 프리셋
-export const cmpYTD = (month = N) => ({ by: PREV, bm: range(month), cy: CURRENT_YEAR, cm: range(month) }); // 선택월 누계 전년比
-export const cmpYoYMonth = (month = N) => ({ by: PREV, bm: [month - 1], cy: CURRENT_YEAR, cm: [month - 1] }); // 선택월 전년동월比
-export const cmpMoM = (month = N) => (
-  month > 1 ? { by: CURRENT_YEAR, bm: [month - 2], cy: CURRENT_YEAR, cm: [month - 1] } : null
+export const cmpYTD = (month = N, year = CURRENT_YEAR) => ({ by: String(Number(year) - 1), bm: range(month), cy: year, cm: range(month) });
+export const cmpYoYMonth = (month = N, year = CURRENT_YEAR) => ({ by: String(Number(year) - 1), bm: [month - 1], cy: year, cm: [month - 1] });
+export const cmpMoM = (month = N, year = CURRENT_YEAR) => (
+  month > 1 ? { by: year, bm: [month - 2], cy: year, cm: [month - 1] } : null
 ); // 선택월 전월比. 1월은 없음
 
 function range(n) { return Array.from({ length: n }, (_, i) => i); }
@@ -133,6 +133,7 @@ export function entityDeltas(kind, region = '전체', clff = '전체', biz = '�
 
 // 엔티티(창고/고객)별 상세 — 매출/이익/마진 변화 + 상승 원가항목 + 판정 근거
 export function entityDetails(kind, region = '전체', clff = '전체', biz = '전체', cmp) {
+  const CURRENT_YEAR = cmp.cy, PREV = String(Number(cmp.cy) - 1);
   const out = [];
   for (const e of opsList(kind, region, clff)) {
     const v = view(e, clff, biz);
@@ -146,7 +147,11 @@ export function entityDetails(kind, region = '전체', clff = '전체', biz = '�
       const r0 = ratioPct(a, pickSum(v.revenue?.[cmp.by], cmp.bm));
       const r1 = ratioPct(b, pickSum(v.revenue?.[cmp.cy], cmp.cm));
       const months = analysisCount(cmp);
-      let up = 0; for (let i = 0; i < months; i++) if ((v.items[it][CURRENT_YEAR]?.[i] || 0) > (v.items[it][PREV]?.[i] || 0) * 1.1) up++;
+      let up = 0;
+      for (let i = 0; i < months; i++) {
+        const base = cmp.by === cmp.cy ? v.items[it][CURRENT_YEAR]?.[i - 1] : v.items[it][PREV]?.[i];
+        if (base > 0 && (v.items[it][CURRENT_YEAR]?.[i] || 0) > base * 1.1) up++;
+      }
       return {
         item: it,
         prev: a,
@@ -174,6 +179,7 @@ export function entityDetails(kind, region = '전체', clff = '전체', biz = '�
 
 // 원가 항목별 비교 (biz로 좁힘) — 전기→당기, 증감 큰 순
 export function costItemCompare(region = '전체', clff = '전체', biz = '전체', cmp) {
+  const CURRENT_YEAR = cmp.cy, PREV = String(Number(cmp.cy) - 1);
   const acc = {};
   const revenue = { [PREV]: Array(12).fill(0), [CURRENT_YEAR]: Array(12).fill(0) };
   for (const e of opsList('warehouses', region, clff)) {
@@ -196,7 +202,10 @@ export function costItemCompare(region = '전체', clff = '전체', biz = '전�
     const recent3 = recentMonths(months - 1, 3);
     const recent5 = recentMonths(months - 1, 5);
     let up = 0;
-    for (let i = 0; i < months; i++) if ((v[CURRENT_YEAR][i] || 0) > (v[PREV][i] || 0) * 1.1) up++;
+    for (let i = 0; i < months; i++) {
+      const base = cmp.by === cmp.cy ? v[CURRENT_YEAR]?.[i - 1] : v[PREV]?.[i];
+      if (base > 0 && (v[CURRENT_YEAR]?.[i] || 0) > base * 1.1) up++;
+    }
     const ratioPrev = ratioPct(a, revPrev);
     const ratioCur = ratioPct(b, revCur);
     const avgRatioPrevYear = avgMonthlyRatioPct(v[PREV], revenue[PREV], range(months)); // 전년 동일기간(전년 당월 포함이 올바름)

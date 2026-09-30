@@ -6,6 +6,7 @@ import raw from '../data/ops.json';
 export const OPS_YEARS = raw.years;                 // ['2025','2026']
 export const OPS_CURRENT = OPS_YEARS[OPS_YEARS.length - 1];
 export const COST_ITEMS = raw.costItems;
+export const OPS_SOURCE = raw.source;
 
 // 실적 개월 수를 데이터에서 자동 감지: 매출이 0이 아닌 마지막 월(미래월은 전부 0).
 // 6월 데이터가 쌓이면 자동으로 6이 됨 — 하드코딩 불필요.
@@ -24,7 +25,7 @@ function detectActualMonths(year) {
 const ACTUAL = Object.fromEntries(OPS_YEARS.map((y) => [y, detectActualMonths(y)]));
 export const opsActualCount = (y) => ACTUAL[y] ?? 12;
 export const EOKDONG = 100;                          // 이상탐지 기준 변동액 = 100 mil VND
-const FIELDS = ['revenue', 'directCost', 'grossProfit', 'opProfit'];
+const FIELDS = ['revenue', 'directCost', 'directProfit', 'indirectCost', 'grossProfit', 'opProfit'];
 
 const sum = (a) => (a || []).reduce((x, v) => x + (v || 0), 0);
 const blankY = () => Object.fromEntries(OPS_YEARS.map((y) => [y, Array(12).fill(0)]));
@@ -36,7 +37,7 @@ export function segKeys(e, clff = '전체', biz = '전체') {
   if (clff === 'CL') {
     if (biz === '운송') return segs.filter((s) => s === '운송');
     if (biz === '창고') return segs.filter((s) => s === '창고');
-    return segs.filter((s) => s === '운송' || s === '창고');
+    return segs.filter((s) => s === '운송' || s === '창고' || s === 'CL 기타');
   }
   if (clff === 'FF') return segs.filter((s) => s === 'FF');
   if (clff === '기타') return segs.filter((s) => s === '기타');
@@ -76,12 +77,12 @@ export const opsGet = (kind, name) => {
 // 집계 (v = view 객체)
 export const annualOf = (v, field, year) => sum(v?.[field]?.[year]);
 export const ytdOf = (v, field, year) => sum((v?.[field]?.[year] || []).slice(0, opsActualCount(year)));
-export function yoyOf(v, field) {
-  const i = OPS_YEARS.indexOf(OPS_CURRENT);
+export function yoyOf(v, field, year = OPS_CURRENT) {
+  const i = OPS_YEARS.indexOf(year);
   if (i <= 0) return null;
-  const n = opsActualCount(OPS_CURRENT);
+  const n = opsActualCount(year);
   const prev = sum((v?.[field]?.[OPS_YEARS[i - 1]] || []).slice(0, n));
-  const cur = sum((v?.[field]?.[OPS_CURRENT] || []).slice(0, n));
+  const cur = sum((v?.[field]?.[year] || []).slice(0, n));
   return prev ? ((cur - prev) / Math.abs(prev)) * 100 : null;
 }
 

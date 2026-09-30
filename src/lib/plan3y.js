@@ -3,8 +3,10 @@
 import raw from '../data/plan3y.json';
 
 export const YEARS = raw.years;                       // ['2024','2025','2026']
-export const BASE_METRICS = ['매출', '매출원가', '매출이익', '영업이익']; // 시트에서 파싱
-export const PL_METRICS = ['매출', '매출원가', '매출이익', '판관비', '영업이익']; // 손익 표시 순서
+export const BASE_METRICS = ['매출', '매출원가', '직접이익', '매출이익', '영업이익'];
+export const PL_METRICS = ['매출', '매출원가', '직접이익', '매출이익', '판관비', '영업이익'];
+export const PLAN_SOURCE = raw.source;
+export const HAS_PLAN = raw.hasPlan !== false;
 // 도출 지표: 판관비 = 매출이익 − 영업이익
 const DERIVED = { '판관비': ['매출이익', '영업이익'] };
 export const METRICS = BASE_METRICS;                  // (호환) leaves 보유 지표
@@ -19,7 +21,7 @@ const addInto = (acc, arr) => { for (let i = 0; i < 12; i++) acc[i] += arr[i] ||
 export function monthsMeta(year) {
   const n = actualMonths[year] ?? 12;
   return Array.from({ length: 12 }, (_, i) => ({
-    month: i + 1, type: i < n ? '실적' : '계획',
+    month: i + 1, type: i < n ? '실적' : HAS_PLAN ? '계획' : '미입력',
   }));
 }
 export const actualCount = (year) => actualMonths[year] ?? 12;
@@ -95,8 +97,9 @@ export function marginPct(year, profitMetric, clff = '전체', region = '전체'
 export function yoy(year, metric, clff = '전체', region = '전체', subtype = '전체') {
   const i = YEARS.indexOf(year);
   if (i <= 0) return null;
-  const prev = annual(YEARS[i - 1], metric, clff, region, subtype);
-  const cur = annual(year, metric, clff, region, subtype);
+  const n = actualCount(year);
+  const prev = sum(series(YEARS[i - 1], metric, clff, region, subtype).slice(0, n));
+  const cur = sum(series(year, metric, clff, region, subtype).slice(0, n));
   return prev ? ((cur - prev) / Math.abs(prev)) * 100 : null;
 }
 

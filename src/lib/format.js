@@ -20,7 +20,7 @@ export const unitLabel = (unit) => (unit === 'krw' ? '백만원' : '백만동');
 // ── 경영계획 전용 단위 (원화 고정) ────────────────────────────
 // 큰 금액(매출/매출원가) = 억원, 이익·비용류 = 백만원
 const EOK_METRICS = new Set(['매출', '매출원가']);
-export const planUnitLabel = (metric) => (EOK_METRICS.has(metric) ? '억원' : '백만원');
+export const planUnitLabel = (metric) => (EOK_METRICS.has(metric) ? '십억동' : '백만동');
 
 // 백만동(기준값) → 경영계획 표시 숫자(원화)
 export function fmtPlan(vndMillion, metric, rate = KRW_RATE_DEFAULT, digits) {
@@ -33,7 +33,7 @@ export function fmtPlan(vndMillion, metric, rate = KRW_RATE_DEFAULT, digits) {
 // 입력값이 이미 '백만원'인 경우(3개년 데이터). 매출·매출원가=억원(÷100), 그 외=백만원.
 export function fmtKrwMetric(krwMn, metric, digits) {
   if (krwMn == null || isNaN(krwMn)) return '-';
-  if (EOK_METRICS.has(metric)) return fmtNum(krwMn / 100, digits ?? 1); // 억원
+  if (EOK_METRICS.has(metric)) return fmtNum(krwMn / 1000, digits ?? 1);
   return fmtNum(krwMn, digits ?? 0);               // 백만원
 }
 

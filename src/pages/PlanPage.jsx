@@ -3,14 +3,15 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
 } from 'recharts';
 import {
-  YEARS, PL_METRICS, CURRENT_YEAR, monthsMeta, actualCount,
+  YEARS, PL_METRICS, CURRENT_YEAR, monthsMeta, actualCount, PLAN_SOURCE, HAS_PLAN,
   series, annual, ytd, yoy, marginPct, subtypeList, insights,
 } from '../lib/plan3y';
 import { fmtKrwMetric, planUnitLabel, fmtPct, deltaColor } from '../lib/format';
 import { CMP, CMP_METRICS, CMP_MONTH, ratio, attain } from '../lib/compare';
-import { opsList as opsL, view as opsView, annualOf as opsAnnual, OPS_CURRENT } from '../lib/ops';
+import { opsList as opsL, view as opsView, annualOf as opsAnnual } from '../lib/ops';
 import { marginDiagnosis, cmpYTD, cmpMoM, cmpYoYMonth, subtypeToBiz, entityDetails, costItemCompare } from '../lib/variance';
 import { useLang } from '../context/LangContext';
+import quality from '../data/pnl_import_quality.json';
 
 // 1,400줄 보고 브리핑(+Firebase 연동)은 지연 로딩 — 첫 화면 번들에서 분리
 const ReportBriefing = lazy(() => import('../components/ReportBriefing'));
@@ -18,8 +19,8 @@ const ReportBriefing = lazy(() => import('../components/ReportBriefing'));
 const TABS = ['요약', ...PL_METRICS];
 const RATIO_LABEL = { 매출원가: '원가율', 매출이익: '매출이익률', 판관비: '판관비율', 영업이익: '영업이익률' };
 const CLFF = ['전체', 'CL', 'FF'];
-const REGIONS = ['전체', '남부', '북부'];
-const YEAR_COLOR = { '2024': '#cbd5e1', '2025': '#60a5fa', '2026': '#1d4ed8' };
+const REGIONS = ['전체', '남부', '북부', '미지정'];
+const YEAR_COLOR = { '2023': '#94a3b8', '2024': '#cbd5e1', '2025': '#60a5fa', '2026': '#1d4ed8' };
 
 const disp = (v, m) => fmtKrwMetric(v, m);
 const deltaTag = (v) =>
@@ -45,10 +46,14 @@ function FilterLabel({ ko }) {
 
 export default function PlanPage() {
   const { t, lang } = useLang();
+  const [year, setYear] = useState(() => {
+    try { const saved = localStorage.getItem('vn-pnl-year'); return YEARS.includes(saved) ? saved : CURRENT_YEAR; }
+    catch { return CURRENT_YEAR; }
+  });
   const [mode, setMode] = useState('월간 비교');
   const [tab, setTab] = useState('요약');
   const [clff, setClff] = useState('전체');
-  const [region, setRegion] = useState('북부');   // 북부 담당자 기본
+  const [region, setRegion] = useState(Number(year) <= 2024 ? '전체' : '북부');
   const [subtype, setSubtype] = useState('전체');
 
   const subOpts = subtypeList(clff);
@@ -60,8 +65,8 @@ export default function PlanPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-slate-800">{lang === 'en' ? 'P&L Plan · Actual' : '경영계획 · 실적'} <span className="text-sm font-normal text-slate-400">{lang === 'en' ? '3-Year' : '3개년'}</span></h1>
-        <span className="text-xs text-slate-400">{lang === 'en' ? `Actual through ${CURRENT_YEAR}.${actualCount(CURRENT_YEAR)}, then plan` : `${CURRENT_YEAR}년 ${actualCount(CURRENT_YEAR)}월까지 실적 · 이후 계획`}</span>
+        <h1 className="text-lg font-bold text-slate-800">{lang === 'en' ? 'P&L Actual' : '경영실적'} <span className="text-sm font-normal text-slate-400">{YEARS.join(' · ')}</span></h1>
+        <span className="text-xs text-slate-400">{`${CURRENT_YEAR}년 ${actualCount(CURRENT_YEAR)}월까지 입력 실적 · 이후 미입력`}</span>
       </div>
 
       {/* 연간 / 월간 모드 */}
@@ -107,20 +112,29 @@ export default function PlanPage() {
         )}
       </div>
 
-      <div className="text-[11px] text-slate-400">현재 보기: <b className="text-slate-600">{scopeLabel}</b> · 단위: 매출 억원 / 매출이익·영업이익 백만원</div>
+      <div className="text-[11px] text-slate-400">현재 보기: <b className="text-slate-600">{scopeLabel}</b> · 매출·매출원가 십억동 / 이익 백만동 · 매출원가=매출−매출이익(직접+간접원가)</div>
+      <details className="rounded-xl border border-amber-100 bg-amber-50/50 p-3 text-xs text-slate-600">
+        <summary className="cursor-pointer font-semibold">원본·연도별 품질 확인 · 2026년 8월까지 · 과거 지역 구분 확인 필요</summary>
+        <div className="overflow-x-auto mt-2"><table className="w-full text-left">
+          <thead><tr className="border-b border-amber-100"><th className="p-2">연도</th><th className="p-2">입력 월</th><th className="p-2">지역 구분</th><th className="p-2">이익 산식 불일치 행</th></tr></thead>
+          <tbody>{YEARS.map((y) => <tr key={y} className="border-b border-amber-100/50"><td className="p-2">{y}</td><td className="p-2">1~{actualCount(y)}월</td><td className="p-2">{Number(y) <= 2024 ? '원본 누락 · 전체 조회' : '북부·남부·미지정'}</td><td className="p-2">직접이익 {quality.identityMismatchRows[`${y}:directProfit`] || 0} / 매출이익 {quality.identityMismatchRows[`${y}:grossProfit`] || 0}</td></tr>)}</tbody>
+        </table></div>
+        <p className="mt-2">불일치 행도 원본 이익값을 유지했습니다. 조정·누락 등 실제 사유는 확인 필요합니다. 창고·고객 명칭 변경은 임의 병합하지 않아 급감·신규 알림으로 나타날 수 있습니다. 계획 데이터는 이번 원본에 없어 목표 달성률을 제공하지 않습니다.</p>
+        <p className="mt-1">갱신: {PLAN_SOURCE?.importedAt?.slice(0, 10)} · 시트 실시간 동기화가 아닌 가져온 데이터 기준</p>
+      </details>
 
-      <InsightCard clff={clff} region={region} />
+      {HAS_PLAN && <InsightCard clff={clff} region={region} />}
 
       {mode === '월간 비교'
-        ? <MonthlyView clff={clff} region={region} subtype={subtype} />
+        ? <MonthlyView year={year} setYear={setYear} clff={clff} region={region} subtype={subtype} onHistoricalYear={() => { setRegion('전체'); setSubtype('전체'); }} />
         : tab === '요약'
           ? <SummaryView clff={clff} region={region} subtype={subtype} />
           : <MetricView metric={tab} clff={clff} region={region} subtype={subtype}
               onRow={(r) => { if (r.setClff) setClffReset(r.setClff); if (r.setSub) setSubtype(r.setSub); if (r.setRegion) setRegion(r.setRegion); }} />}
 
-      <ConstituentCard clff={clff} region={region} />
+      <ConstituentCard year={year} clff={clff} region={region} />
 
-      <p className="text-[11px] text-slate-400 text-center">출처: 구글시트 ‘대쉬보드’ 지역 탭 · 참고용, 원본과 교차확인 권장</p>
+      <p className="text-[11px] text-slate-400 text-center">출처: {PLAN_SOURCE?.title} · Direct Profit=직접이익 / Gross Profit=매출이익 · 참고용, 원본과 교차확인 권장</p>
     </div>
   );
 }
@@ -141,10 +155,10 @@ function ConstituentCol({ title, list }) {
 }
 
 /* 구성 Top 고객/창고 — 경영계획 숫자를 "누가 구성하나" (운영 데이터/동 기준) */
-function ConstituentCard({ clff, region }) {
+function ConstituentCard({ clff, region, year }) {
   const { lang } = useLang();
   const top = (kind) => opsL(kind, region, clff)
-    .map((e) => ({ name: e.name, region: e.region, rev: opsAnnual(opsView(e, clff, '전체'), 'revenue', OPS_CURRENT) }))
+    .map((e) => ({ name: e.name, region: e.region, rev: opsAnnual(opsView(e, clff, '전체'), 'revenue', year) }))
     .filter((x) => x.rev > 0)
     .sort((a, b) => b.rev - a.rev)
     .slice(0, 5);
@@ -154,13 +168,13 @@ function ConstituentCard({ clff, region }) {
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3">
       <div className="flex items-baseline justify-between mb-2">
         <span className="text-sm font-semibold text-slate-700">{lang === 'en' ? 'Top constituents' : '구성 Top'} <span className="text-[11px] font-normal text-slate-400">{lang === 'en' ? 'who drives this' : '이 숫자=누가'}</span></span>
-        <span className="text-[11px] text-slate-400">{OPS_CURRENT} · bil VND</span>
+        <span className="text-[11px] text-slate-400">{year} · bil VND</span>
       </div>
       <div className="flex gap-4 flex-wrap">
         <ConstituentCol title={lang === 'en' ? 'Top Customers' : '고객 Top 5'} list={cust} />
         <ConstituentCol title={lang === 'en' ? 'Top Warehouses' : '창고 Top 5'} list={wh} />
       </div>
-      <div className="text-[10px] text-slate-400 mt-1.5">{lang === 'en' ? '※ Operational data (VND dong) — different source/unit from P&L (KRW); for context, not exact match.' : '※ 운영 데이터(동) 기준 — 경영계획(원)과 출처·단위 달라 정확 일치 아님. 구성 파악용 참고.'}</div>
+      <div className="text-[10px] text-slate-400 mt-1.5">동일 PNL 원본 · 선택 연도 입력 실적 누계 기준 · 고객명 표기 차이는 원본대로 유지</div>
     </div>
   );
 }
@@ -202,7 +216,7 @@ function InsightCard({ clff, region }) {
                 {mini.map((b) => <Cell key={b.key} fill={YEAR_COLOR[b.key]} />)}
               </Bar>
             </BarChart>
-            <div className="text-[9px] text-slate-400 text-center -mt-1">참고: 매출 추이(억원)</div>
+            <div className="text-[9px] text-slate-400 text-center -mt-1">참고: 매출 추이(십억동)</div>
           </div>
         </div>
       )}
@@ -222,7 +236,7 @@ function YearTable({ rows, title, hint, onRow }) {
               <th className="text-left font-medium px-3 py-2.5">{tt('항목')}</th>
               {YEARS.map((y) => (
                 <th key={y} className={`text-right font-medium px-3 py-2.5 whitespace-nowrap ${y === CURRENT_YEAR ? 'bg-blue-50/50 text-blue-700' : ''}`}>
-                  {y.slice(2)}년<span className="block text-[9px] font-normal text-slate-300">{y === CURRENT_YEAR ? '실적+계획' : '실적'}</span>
+                  {y.slice(2)}년<span className="block text-[9px] font-normal text-slate-300">{y === CURRENT_YEAR ? '입력 실적' : '실적'}</span>
                 </th>
               ))}
               <th className="text-right font-medium px-3 py-2.5">{tt('전년비')}</th>
@@ -302,7 +316,7 @@ function MonthTable({ metric, clff, region, subtype }) {
           </tbody>
         </table>
       </div>
-      <div className="text-[10px] text-slate-400 mt-1.5">연한 글씨 = 계획(미실적) · {CURRENT_YEAR}년 {actualCount(CURRENT_YEAR) + 1}월부터</div>
+      <div className="text-[10px] text-slate-400 mt-1.5">연한 글씨 = 미입력 · {CURRENT_YEAR}년 {actualCount(CURRENT_YEAR) + 1}월부터 미입력</div>
     </Card>
   );
 }
@@ -310,7 +324,7 @@ function MonthTable({ metric, clff, region, subtype }) {
 /* ── 월간 비교 (당월 vs 전월 vs 전년동월 + 누계) ──────────── */
 const arrSum = (a, n) => (a || []).slice(0, n).reduce((x, v) => x + (v || 0), 0);
 const pctOf = (cur, base) => (base ? ((cur - base) / Math.abs(base)) * 100 : null);
-const MONTHLY_VIEW_KEY = 'vn_dashboard_monthly_view_v1';
+const MONTHLY_VIEW_KEY = 'vn_dashboard_monthly_view_pnl_v2';
 const MONTHLY_VIEW_MODES = ['요약', '점검', '상세'];
 const MONTHLY_COMPARE_BASIS = ['mom', 'yoy', 'ytd'];
 
@@ -339,16 +353,17 @@ function loadMonthlyViewState(lastActual) {
   }
 }
 
-function MonthlyView({ clff, region, subtype }) {
+function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YEAR, setYear }) {
   const { t, lang } = useLang();
   const meta = monthsMeta(CURRENT_YEAR);
   const lastActual = actualCount(CURRENT_YEAR);
   const [m, setM] = useState(() => loadMonthlyViewState(lastActual).month);          // 선택 월(1~12)
   const [viewMode, setViewMode] = useState(() => loadMonthlyViewState(lastActual).viewMode);
   const [compareBasis, setCompareBasis] = useState(() => loadMonthlyViewState(lastActual).compareBasis);
-  const prevYear = YEARS[YEARS.indexOf(CURRENT_YEAR) - 1];
+  const prevYear = String(Number(CURRENT_YEAR) - 1);
   const type = meta[m - 1].type;                    // 실적 | 계획
-  const effectiveBasis = m === 1 && compareBasis === 'mom' ? 'yoy' : compareBasis;
+  const hasPreviousYear = YEARS.includes(prevYear) && !(region !== '전체' && Number(CURRENT_YEAR) <= 2025);
+  const effectiveBasis = !hasPreviousYear ? 'mom' : m === 1 && compareBasis === 'mom' ? 'yoy' : compareBasis;
 
   useEffect(() => {
     localStorage.setItem(MONTHLY_VIEW_KEY, JSON.stringify({ month: m, viewMode, compareBasis: effectiveBasis }));
@@ -359,14 +374,14 @@ function MonthlyView({ clff, region, subtype }) {
     const prv = series(prevYear, metric, clff, region, subtype);
     const cm = cur[m - 1] ?? 0;
     const pm = m >= 2 ? cur[m - 2] : null;          // 전월
-    const ym = prv[m - 1];                          // 전년 동월
-    const ytdC = arrSum(cur, m), ytdP = arrSum(prv, m);
+    const ym = hasPreviousYear ? prv[m - 1] : null;
+    const ytdC = arrSum(cur, m), ytdP = hasPreviousYear ? arrSum(prv, m) : null;
     const annual = arrSum(cur, 12);
     return {
       metric, cm, pm, ym, annual,
       mom: pm == null ? null : pctOf(cm, pm),
-      yoy: pctOf(cm, ym),
-      ytdC, ytdP, ytdYoy: pctOf(ytdC, ytdP),
+      yoy: hasPreviousYear ? pctOf(cm, ym) : null,
+      ytdC, ytdP, ytdYoy: hasPreviousYear ? pctOf(ytdC, ytdP) : null,
       progress: annual ? (ytdC / annual) * 100 : null,
     };
   });
@@ -379,14 +394,14 @@ function MonthlyView({ clff, region, subtype }) {
   ];
   const basisOptions = [
     { id: 'mom', label: lang === 'en' ? 'MoM' : '전월비', disabled: m === 1 },
-    { id: 'yoy', label: lang === 'en' ? 'YoY month' : '전년동월비' },
-    { id: 'ytd', label: lang === 'en' ? 'YTD YoY' : '누계 전년비' },
+    { id: 'yoy', disabled: !hasPreviousYear, label: lang === 'en' ? 'YoY month' : '전년동월비' },
+    { id: 'ytd', disabled: !hasPreviousYear, label: lang === 'en' ? 'YTD YoY' : '누계 전년비' },
   ];
 
   return (
     <>
       {/* 목표 대비 원본은 최신 실적월 자료만 있으므로 해당 월에서만 표시 */}
-      {m === lastActual && viewMode === '상세' && (
+      {HAS_PLAN && m === lastActual && viewMode === '상세' && (
         <>
           <PlanCard />
           <LineCard metric="매출" />
@@ -394,6 +409,16 @@ function MonthlyView({ clff, region, subtype }) {
       )}
 
       {/* 월 선택 */}
+      {Number(CURRENT_YEAR) <= 2024 && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">이 연도 원본은 지역·세부 사업 구분이 누락되어 있습니다. 지역 ‘전체’로 조회해 주세요. 북부·남부 비교는 2025년부터 가능합니다.</p>}
+      {!hasPreviousYear && <p className="text-xs text-slate-500">전년 자료 또는 동일 지역 구분이 없어 전년 비교를 제공하지 않습니다.</p>}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-xs text-slate-400 mr-1">기준 연도</span>
+        {YEARS.map((year) => <Chip key={year} active={year === CURRENT_YEAR} onClick={() => {
+          setYear(year); setM(actualCount(year)); localStorage.setItem('vn-pnl-year', year);
+          if (Number(year) <= 2024) onHistoricalYear();
+          if (year === YEARS[0]) setCompareBasis('mom');
+        }}>{year}년</Chip>)}
+      </div>
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs text-slate-400 mr-1">{lang === 'en' ? 'Month' : '기준 월'}</span>
         {meta.map((mo, i) => (
@@ -476,15 +501,15 @@ function MonthlyView({ clff, region, subtype }) {
       </Card>
 
       {/* 선택 기준 변동 원인 분석 */}
-      <VarianceCard
+      {(hasPreviousYear || m > 1) && <VarianceCard
         clff={clff}
         region={region}
         subtype={subtype}
         mode={effectiveBasis === 'ytd' ? 'ytd' : 'month'}
         basis={effectiveBasis}
         viewMode={viewMode}
-        month={m}
-      />
+        month={m} year={CURRENT_YEAR}
+      />}
 
       {/* 누계 비교 */}
       {(effectiveBasis === 'ytd' || viewMode === '상세') && (
@@ -497,8 +522,8 @@ function MonthlyView({ clff, region, subtype }) {
                 <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{`${prevYear.slice(2)} ${t('누계')}`}</th>
                 <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap bg-blue-50/50 text-blue-700">{`${CURRENT_YEAR.slice(2)} ${t('누계')}`}</th>
                 <th className="text-right font-medium px-3 py-2.5">{t('전년비')}</th>
-                <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{t('연간 전망')}</th>
-                <th className="text-right font-medium px-3 py-2.5">{t('진행률')}</th>
+                <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">입력 실적 합계</th>
+                <th className="text-right font-medium px-3 py-2.5">입력 합계 대비</th>
               </tr>
             </thead>
             <tbody>
@@ -518,7 +543,7 @@ function MonthlyView({ clff, region, subtype }) {
       </Card>
       )}
 
-      <p className="text-[11px] text-slate-400 text-center">{lang === 'en' ? 'Current month vs prev month / same month last year · YTD vs last year & annual progress' : '당월=전월·전년동월 대비, 누계=전년 대비·연간 전망 진행률 · 단위 매출 억원/이익 백만원'}</p>
+      <p className="text-[11px] text-slate-400 text-center">{lang === 'en' ? 'Current month vs prev month / same month last year · YTD vs last year & annual progress' : '당월=전월·전년동월 대비, 누계=전년 동일기간 대비·입력 실적 비중 · 단위 매출 십억동/이익 백만동'}</p>
     </>
   );
 }
@@ -665,11 +690,11 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype, viewMode = '�
 }
 
 /* 변동 원인 상세 — 전월비/전년비 섹션으로 창고·고객·원가 사유 전개. mode: 'ytd'|'month' */
-function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', viewMode = '상세', month = actualCount(CURRENT_YEAR) }) {
+function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', viewMode = '상세', month = actualCount(CURRENT_YEAR), year = CURRENT_YEAR }) {
   const { lang } = useLang();
   const L = (ko, en) => (lang === 'en' ? en : ko);
-  const monthCmp = cmpMoM(month);
-  const primaryCmp = mode === 'month' ? (monthCmp || cmpYoYMonth(month)) : cmpYTD(month);
+  const monthCmp = cmpMoM(month, year);
+  const primaryCmp = mode === 'month' ? (monthCmp || cmpYoYMonth(month, year)) : cmpYTD(month, year);
   const overall = marginDiagnosis(primaryCmp, clff, region, subtype);
   if (overall.revYoY == null || overall.gpYoY == null) return null;
   const anyAnom = overall.anomaly || (overall.marginPp != null && overall.marginPp <= -0.5);
@@ -687,12 +712,12 @@ function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', view
             ? L('1월 전년동월비 · 1월 누계 동일', 'January YoY · same as January YTD')
             : L(`전년동월비 ${month}월`, `YoY ${month}M`),
           color: 'text-indigo-700',
-          cmp: cmpYoYMonth(month),
+          cmp: cmpYoYMonth(month, year),
         }])
     : [{
         tag: L(`1~${month}월 누계 전년비`, `YTD through ${month}M YoY`),
         color: 'text-amber-800',
-        cmp: cmpYTD(month),
+        cmp: cmpYTD(month, year),
       }];
 
   return (
@@ -711,7 +736,7 @@ function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', view
         />
       ))}
       {viewMode === '상세' && (
-        <div className="text-[10px] text-slate-400">{L('※ 매출·이익률=경영계획(원). 창고·고객·원가항목=운영데이터(mil VND). ▼악화/▲개선=매출이익 증감. 🔧=구조적(여러 달 지속). 교차확인 권장.', '※ Rev/margin: KRW (P&L). WH/cust/cost: ops (mil VND). ▼down/▲up = gross-profit Δ. 🔧 = structural. Cross-check advised.')}</div>
+        <div className="text-[10px] text-slate-400">매출·이익·원가 항목은 동일 PNL 원본 기준(VND)입니다. ▼악화/▲개선=매출이익 증감. 🔧=반복 변동. 실제 원인은 담당자 확인 필요.</div>
       )}
     </div>
   );

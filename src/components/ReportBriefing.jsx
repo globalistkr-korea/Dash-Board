@@ -12,6 +12,7 @@ import {
   saveReportNotesToCloud,
 } from '../lib/reportNotesStore';
 import { useLang } from '../context/LangContext';
+import { OPS_SOURCE } from '../lib/ops';
 
 const NOTE_PREFIX = 'vn_dashboard_report_notes_v1:';
 const SETTINGS_KEY = 'vn_dashboard_report_ratio_settings_v1';
@@ -34,15 +35,15 @@ const ratio = (value) => (
     : `${value.toFixed(1)}%`
 );
 const THRESHOLDS = ['item', 3, 5, 10];
-const baselineOptions = (throughMonth, L) => [
-  { value: 'curYtd', label: L(`26년 1~${throughMonth}월 평균`, `2026 Jan-${throughMonth}M avg`) },
-  { value: 'prevSame', label: L('25년 동일기간 평균', '2025 same-period avg') },
+const baselineOptions = (throughMonth, L, year = '2026') => [
+  { value: 'curYtd', label: L(`${year}년 1~${Math.max(0, throughMonth - 1)}월 평균(당월 제외)`, `${year} Jan-${Math.max(0, throughMonth - 1)}M avg (excluding current)`) },
+  { value: 'prevSame', label: L(`${Number(year) - 1}년 동일기간 평균`, `${Number(year) - 1} same-period avg`) },
   { value: 'recent3', label: L('최근 3개월 평균', 'Recent 3M avg') },
   { value: 'recent5', label: L('최근 5개월 평균', 'Recent 5M avg') },
 ];
-const baselineLabel = (basis, throughMonth, L) => (
-  baselineOptions(throughMonth, L).find((option) => option.value === basis)?.label
-  || baselineOptions(throughMonth, L)[0].label
+const baselineLabel = (basis, throughMonth, L, year) => (
+  baselineOptions(throughMonth, L, year).find((option) => option.value === basis)?.label
+  || baselineOptions(throughMonth, L, year)[0].label
 );
 const thresholdLabel = (value, L) => (
   value === 'item' ? L('항목별 기준', 'By item') : `±${value}%p`
@@ -503,13 +504,14 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
   const isDetail = viewMode === '상세';
   const biz = subtypeToBiz(subtype);
   const throughMonth = Math.max(...cmp.cm.map((i) => i + 1));
-  const curAvgLabel = L(`26년 1~${throughMonth}월 평균`, `2026 Jan-${throughMonth}M avg`);
-  const prevAvgLabel = L(`25년 동일기간 평균`, `2025 same-period avg`);
+  const year = cmp.cy;
+  const curAvgLabel = L(`${year}년 1~${Math.max(0, throughMonth - 1)}월 평균(당월 제외)`, `${year} Jan-${Math.max(0, throughMonth - 1)}M avg (excluding current)`);
+  const prevAvgLabel = L(`${Number(year) - 1}년 동일기간 평균`, `${Number(year) - 1} same-period avg`);
   const [settings, setSettings] = useState(loadSettings);
   const baseline = settings.baseline;
   const thresholdPp = settings.thresholdPp;
   const itemThresholds = useMemo(() => settings.itemThresholds || {}, [settings.itemThresholds]);
-  const selectedBaselineLabel = baselineLabel(baseline, throughMonth, L);
+  const selectedBaselineLabel = baselineLabel(baseline, throughMonth, L, year);
   const diagnosis = useMemo(
     () => marginDiagnosis(cmp, clff, region, subtype),
     [cmp, clff, region, subtype],
@@ -539,7 +541,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     [region, clff, biz, cmp, baseline, thresholdPp, itemThresholds],
   );
   const noteKey = [
-    cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype,
+    cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype, OPS_SOURCE?.spreadsheetId || 'legacy',
   ].join(':');
   const [notes, setNotes] = useState(() => loadNotes(noteKey));
   const [open, setOpen] = useState(true);
@@ -697,7 +699,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       title: L(`${cleanItem(item.item)} 증가 사유`, `${cleanItem(item.item)} increase`),
       evidence: L(
         `${money(item.prev)} → ${money(item.cur)} mil VND, ${money(item.delta)} mil VND 증가 (${signed(item.pct)}). 매출 대비 원가율은 ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)})이고, ${curAvgLabel} ${ratio(item.avgRatioCurYtd)} 대비 ${pp(item.avgDeltaPp)}입니다. ${item.structural ? '여러 달 반복되어 구조적 가능성이 있습니다.' : '특정 기간 집중 여부를 확인해야 합니다.'}`,
-        `${money(item.prev)} → ${money(item.cur)} mil VND, up ${money(item.delta)} (${signed(item.pct)}). Cost ratio moved ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)}), ${pp(item.avgDeltaPp)} vs the 2026 YTD average ${ratio(item.avgRatioCurYtd)}. ${item.structural ? 'Repeated across months; potentially structural.' : 'Check whether the increase is period-specific.'}`,
+        `${money(item.prev)} → ${money(item.cur)} mil VND, up ${money(item.delta)} (${signed(item.pct)}). Cost ratio moved ${ratio(item.ratioPrev)} → ${ratio(item.ratioCur)}(${pp(item.ratioDeltaPp)}), ${pp(item.avgDeltaPp)} vs the ${year} YTD average ${ratio(item.avgRatioCurYtd)}. ${item.structural ? 'Repeated across months; potentially structural.' : 'Check whether the increase is period-specific.'}`,
       ),
       warehouseDetail: warehouseDrivers.length
         ? contributionText(warehouseDrivers, L)
@@ -734,7 +736,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       title: L(`${cleanItem(item.item)} 원가율 이탈`, `${cleanItem(item.item)} cost-ratio deviation`),
       evidence: L(
         `금액은 ${money(item.prev)} → ${money(item.cur)} mil VND(${item.delta >= 0 ? '+' : ''}${money(item.delta)})이고, 매출 대비 원가율은 ${ratio(item.ratioCur)}입니다. 선택 기준선 ${selectedBaselineLabel} ${ratio(item.baselineRatio)} 대비 ${pp(item.basisDeltaPp)}로, 임계값 ${item.thresholdPp}%p를 벗어났습니다. 참고로 ${curAvgLabel} 대비 ${pp(item.avgDeltaPp)}, ${prevAvgLabel} 대비 ${pp(item.prevAvgDeltaPp)}입니다.`,
-        `Amount moved ${money(item.prev)} → ${money(item.cur)} mil VND (${item.delta >= 0 ? '+' : ''}${money(item.delta)}), and the cost ratio is ${ratio(item.ratioCur)}. It is ${pp(item.basisDeltaPp)} vs the selected baseline ${selectedBaselineLabel} ${ratio(item.baselineRatio)}, beyond the ${item.thresholdPp}pp threshold. For reference: ${pp(item.avgDeltaPp)} vs 2026 YTD and ${pp(item.prevAvgDeltaPp)} vs 2025 same-period.`,
+        `Amount moved ${money(item.prev)} → ${money(item.cur)} mil VND (${item.delta >= 0 ? '+' : ''}${money(item.delta)}), and the cost ratio is ${ratio(item.ratioCur)}. It is ${pp(item.basisDeltaPp)} vs the selected baseline ${selectedBaselineLabel} ${ratio(item.baselineRatio)}, beyond the ${item.thresholdPp}pp threshold. For reference: ${pp(item.avgDeltaPp)} vs ${year} YTD and ${pp(item.prevAvgDeltaPp)} vs ${Number(year) - 1} same-period.`,
       ),
       chartRows: baseline === 'recent3' ? item.ratioTrend3 : item.ratioTrend5,
       baselineRatio: item.baselineRatio,
@@ -1080,7 +1082,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
             <div className="mb-2 rounded-md border border-blue-100 bg-white/70 p-2">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[10px] font-semibold text-slate-500">{L('원가율 기준선', 'Cost-ratio baseline')}</span>
-                {baselineOptions(throughMonth, L).map((option) => (
+                {baselineOptions(throughMonth, L, year).map((option) => (
                   <button
                     key={option.value}
                     type="button"
