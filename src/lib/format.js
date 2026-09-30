@@ -1,7 +1,8 @@
 // 모든 금액 값은 '백만동(VND mn)' 단위를 기준으로 다룬다.
 // 원화 토글 시 백만동 × rate(0.056) = 백만원.
 
-export const KRW_RATE_DEFAULT = 0.056;
+import { KRW_REFERENCE_RATE, smallMoneyLabel, largeMoneyLabel, formatSmallMoney, formatLargeMoney } from './currency';
+export const KRW_RATE_DEFAULT = KRW_REFERENCE_RATE;
 
 export function fmtNum(v, digits = 0) {
   if (v == null || isNaN(v)) return '-';
@@ -17,10 +18,9 @@ export function fmtMoney(vndMillion, unit, rate = KRW_RATE_DEFAULT) {
 
 export const unitLabel = (unit) => (unit === 'krw' ? '백만원' : '백만동');
 
-// ── 경영계획 전용 단위 (원화 고정) ────────────────────────────
-// 큰 금액(매출/매출원가) = 억원, 이익·비용류 = 백만원
+// 손익 화면: 큰 금액은 십억동/억원, 이익·원가는 백만동/백만원.
 const EOK_METRICS = new Set(['매출', '매출원가']);
-export const planUnitLabel = (metric) => (EOK_METRICS.has(metric) ? '십억동' : '백만동');
+export const planUnitLabel = (metric) => (EOK_METRICS.has(metric) ? largeMoneyLabel() : smallMoneyLabel());
 
 // 백만동(기준값) → 경영계획 표시 숫자(원화)
 export function fmtPlan(vndMillion, metric, rate = KRW_RATE_DEFAULT, digits) {
@@ -30,11 +30,11 @@ export function fmtPlan(vndMillion, metric, rate = KRW_RATE_DEFAULT, digits) {
   return fmtNum(krwMn, digits ?? 0);               // 백만원
 }
 
-// 입력값이 이미 '백만원'인 경우(3개년 데이터). 매출·매출원가=억원(÷100), 그 외=백만원.
+// 기존 함수명 유지. 입력은 백만동이며, 선택 통화로 표시만 환산한다.
 export function fmtKrwMetric(krwMn, metric, digits) {
   if (krwMn == null || isNaN(krwMn)) return '-';
-  if (EOK_METRICS.has(metric)) return fmtNum(krwMn / 1000, digits ?? 1);
-  return fmtNum(krwMn, digits ?? 0);               // 백만원
+  void digits;
+  return EOK_METRICS.has(metric) ? formatLargeMoney(krwMn) : formatSmallMoney(krwMn);
 }
 
 // 비율(%) 표시

@@ -10,6 +10,7 @@ import { fmtKrwMetric, planUnitLabel, fmtPct, deltaColor } from '../lib/format';
 import { CMP, CMP_METRICS, CMP_MONTH, ratio, attain } from '../lib/compare';
 import { opsList as opsL, view as opsView, annualOf as opsAnnual } from '../lib/ops';
 import { marginDiagnosis, cmpYTD, cmpMoM, cmpYoYMonth, subtypeToBiz, entityDetails, costItemCompare } from '../lib/variance';
+import { formatSmallMoney, formatLargeMoney, smallMoneyLabel, largeMoneyLabel } from '../lib/currency';
 import { useLang } from '../context/LangContext';
 import quality from '../data/pnl_import_quality.json';
 
@@ -112,7 +113,7 @@ export default function PlanPage() {
         )}
       </div>
 
-      <div className="text-[11px] text-slate-400">현재 보기: <b className="text-slate-600">{scopeLabel}</b> · 매출·매출원가 십억동 / 이익 백만동 · 매출원가=매출−매출이익(직접+간접원가)</div>
+      <div className="text-[11px] text-slate-400">현재 보기: <b className="text-slate-600">{scopeLabel}</b> · 매출·매출원가 {largeMoneyLabel()} / 이익 {smallMoneyLabel()} · 매출원가=매출−매출이익(직접+간접원가)</div>
       <details className="rounded-xl border border-amber-100 bg-amber-50/50 p-3 text-xs text-slate-600">
         <summary className="cursor-pointer font-semibold">원본·연도별 품질 확인 · 2026년 8월까지 · 과거 지역 구분 확인 필요</summary>
         <div className="overflow-x-auto mt-2"><table className="w-full text-left">
@@ -147,7 +148,7 @@ function ConstituentCol({ title, list }) {
       {list.map((x, i) => (
         <div key={x.name} className="flex justify-between gap-2 text-xs py-0.5 border-b border-slate-50 last:border-0">
           <span className="text-slate-600 truncate"><span className="text-slate-300 mr-1">{i + 1}</span>{x.name}</span>
-          <span className="tabular-nums text-slate-700 shrink-0">{(x.rev / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}</span>
+          <span className="tabular-nums text-slate-700 shrink-0">{formatLargeMoney(x.rev)}</span>
         </div>
       ))}
     </div>
@@ -168,7 +169,7 @@ function ConstituentCard({ clff, region, year }) {
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3">
       <div className="flex items-baseline justify-between mb-2">
         <span className="text-sm font-semibold text-slate-700">{lang === 'en' ? 'Top constituents' : '구성 Top'} <span className="text-[11px] font-normal text-slate-400">{lang === 'en' ? 'who drives this' : '이 숫자=누가'}</span></span>
-        <span className="text-[11px] text-slate-400">{year} · bil VND</span>
+        <span className="text-[11px] text-slate-400">{year} · {largeMoneyLabel()}</span>
       </div>
       <div className="flex gap-4 flex-wrap">
         <ConstituentCol title={lang === 'en' ? 'Top Customers' : '고객 Top 5'} list={cust} />
@@ -543,7 +544,7 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
       </Card>
       )}
 
-      <p className="text-[11px] text-slate-400 text-center">{lang === 'en' ? 'Current month vs prev month / same month last year · YTD vs last year & annual progress' : '당월=전월·전년동월 대비, 누계=전년 동일기간 대비·입력 실적 비중 · 단위 매출 십억동/이익 백만동'}</p>
+      <p className="text-[11px] text-slate-400 text-center">{lang === 'en' ? 'Current month vs prev month / same month last year · YTD vs last year & annual progress' : `당월=전월·전년동월 대비, 누계=전년 동일기간 대비·입력 실적 비중 · 단위 매출 ${largeMoneyLabel()}/이익 ${smallMoneyLabel()}`}</p>
     </>
   );
 }
@@ -600,7 +601,7 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype, viewMode = '�
   const wh = entityDetails('warehouses', region, clff, biz, cmp);
   const cu = entityDetails('customers', region, clff, biz, cmp);
   const items = costItemCompare(region, clff, biz, cmp);
-  const mnD = (v) => Math.round(v).toLocaleString('ko-KR');
+  const mnD = formatSmallMoney;
   const pp = (v) => (v == null || !isFinite(v) ? '-' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`);
   const pct = (v) => (v == null || !isFinite(v) ? '-' : `${v.toFixed(1)}%`);
   const compress = d.anomaly || (d.marginPp != null && d.marginPp <= -0.5);
@@ -653,7 +654,7 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype, viewMode = '�
         <table className="w-full text-[11px] mt-0.5">
           <thead>
             <tr className="text-slate-400">
-              <th className="text-left font-normal py-0.5">{L('전체 원가 항목', 'Total cost item')} <span className="text-slate-300">mil VND</span></th>
+              <th className="text-left font-normal py-0.5">{L('전체 원가 항목', 'Total cost item')} <span className="text-slate-300">{smallMoneyLabel()}</span></th>
               <th className="text-right font-normal">{L('전기', 'Base')}</th>
               <th className="text-right font-normal">{L('당기', 'Now')}</th>
               <th className="text-right font-normal">Δ</th>

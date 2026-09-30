@@ -9,6 +9,15 @@ const NAV_ITEMS = [
   { id: 'contract',  label: '계약',      icon: FileText   },
 ];
 
+function CurrencyToggle() {
+  const { currency, toggleCurrency } = useLang();
+  return <button onClick={toggleCurrency} aria-label="통화 전환" aria-pressed={currency === 'krw'}
+    className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-blue-700/60 hover:bg-blue-700 text-xs font-semibold text-white"
+    title="원화 / 베트남동 전환 · 원화는 참고 환율 1 VND = 0.056원">
+    <span className={currency === 'krw' ? 'text-white' : 'text-blue-300'}>원</span><span className="text-blue-400">/</span><span className={currency === 'vnd' ? 'text-white' : 'text-blue-300'}>동</span>
+  </button>;
+}
+
 function LangToggle() {
   const { lang, toggleLang } = useLang();
   return (
@@ -48,19 +57,19 @@ function UpdateBanner() {
 }
 
 export default function Layout({ currentPage, onNavigate, children }) {
-  const { t } = useLang();
+  const { t, currency } = useLang();
   return (
     <div className="min-h-screen flex flex-col bg-slate-100">
       <UpdateBanner />
       {/* 상단 헤더 */}
       <header className="bg-blue-800 text-white shadow-lg sticky top-0 z-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BarChart2 className="w-6 h-6 text-blue-200" />
-            <span className="font-bold text-base sm:text-lg tracking-tight">대한통운 북부 대시보드</span>
+        <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <BarChart2 className="w-6 h-6 text-blue-200 shrink-0" />
+            <span className="font-bold text-sm sm:text-lg tracking-tight truncate">대한통운 북부 대시보드</span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* 데스크톱 네비 */}
             <nav className="hidden md:flex items-center gap-1">
               {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
@@ -75,10 +84,12 @@ export default function Layout({ currentPage, onNavigate, children }) {
                 </button>
               ))}
             </nav>
+            <CurrencyToggle />
             <LangToggle />
           </div>
         </div>
       </header>
+      {currency === 'krw' && <div className="bg-blue-50 text-blue-700 text-center px-3 py-1 text-[11px]">원화 환산 · 참고 환율 1 VND = 0.056원(고정, 실시간 아님) · 원본·분석 기준은 VND</div>}
 
       {/* 메인 */}
       <main className="flex-1 max-w-screen-xl mx-auto w-full px-3 sm:px-4 py-4 pb-24 md:pb-6">

@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useSyncExternalStore } from 'react';
+import { getCurrency, subscribeCurrency, setCurrency } from '../lib/currency';
 import { EN, CONTRACT_KO } from '../lib/labels';
 
 const LangContext = createContext(null);
@@ -9,6 +10,8 @@ const initLang = () => {
 };
 
 export function LangProvider({ children }) {
+  const currency = useSyncExternalStore(subscribeCurrency, getCurrency, () => 'vnd');
+  const toggleCurrency = () => setCurrency(currency === 'vnd' ? 'krw' : 'vnd');
   const [lang, setLang] = useState(initLang); // 'ko' | 'en'
   useEffect(() => { localStorage.setItem(KEY, lang); }, [lang]);
   const toggleLang = () => setLang((l) => (l === 'ko' ? 'en' : 'ko'));
@@ -19,7 +22,7 @@ export function LangProvider({ children }) {
   const tf = (enKey) => (lang === 'ko' ? (CONTRACT_KO[enKey] || enKey) : enKey);
 
   return (
-    <LangContext.Provider value={{ lang, setLang, toggleLang, t, tf }}>
+    <LangContext.Provider value={{ lang, setLang, toggleLang, t, tf, currency, toggleCurrency }}>
       {children}
     </LangContext.Provider>
   );

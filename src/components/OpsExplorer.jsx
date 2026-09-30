@@ -3,13 +3,14 @@ import {
   OPS_YEARS, OPS_CURRENT, opsActualCount, OPS_SOURCE,
   opsList, opsGet, view, annualOf, ytdOf, yoyOf, anomaliesOf, allAnomalies, itemRanking,
 } from '../lib/ops';
+import { formatSmallMoney, formatLargeMoney, smallMoneyLabel, largeMoneyLabel } from '../lib/currency';
 import { useLang } from '../context/LangContext';
 
 const REGIONS = ['전체', '북부', '남부', '미지정'];
 const CLFFS = ['전체', 'CL', 'FF', '기타'];
 const BIZS = ['전체', '운송', '창고'];
-const eok = (mn) => mn == null ? '-' : (mn / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 1 }); // bil VND
-const mn = (v) => v == null ? '-' : Math.round(v).toLocaleString('ko-KR');
+const eok = formatLargeMoney;
+const mn = formatSmallMoney;
 const pctTxt = (v) => v == null ? '-' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 const dcol = (v) => v == null ? 'text-slate-400' : v >= 0 ? 'text-blue-600' : 'text-red-500';
 
@@ -77,7 +78,7 @@ export default function OpsExplorer({ kind, groupNoun }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-slate-800">{t(groupNoun)} <span className="text-sm font-normal text-slate-400">{OPS_YEARS.join('·')}</span></h1>
-        <span className="text-xs text-slate-400">{year}년 {opsActualCount(year)}월까지 실적 · 매출 bil VND · 원가 mil VND</span>
+        <span className="text-xs text-slate-400">{year}년 {opsActualCount(year)}월까지 실적 · 매출 {largeMoneyLabel()} · 원가 {smallMoneyLabel()}</span>
       </div>
 
       <div className="flex gap-1.5 flex-wrap">{OPS_YEARS.map(y => <Chip key={y} active={year === y} onClick={() => changeYear(y)}>{y}년</Chip>)}</div>
@@ -122,7 +123,7 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
       </div>
       {open && (
         <div className="mt-2 space-y-1">
-          {topAnoms.length === 0 && <div className="text-[12px] text-amber-700">100 mil VND 이상 변동 없음.</div>}
+          {topAnoms.length === 0 && <div className="text-[12px] text-amber-700">{formatSmallMoney(100)} {smallMoneyLabel()} 이상 변동 없음.</div>}
           {topAnoms.map((a, i) => (
             <button key={i} onClick={() => onPick(a.entity)}
               className="flex items-center gap-2 w-full text-left text-[12px] hover:bg-amber-100/60 rounded px-1.5 py-1">
@@ -134,7 +135,7 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
               <span className="text-slate-400 ml-auto tabular-nums shrink-0">{mn(a.prev)}→{mn(a.cur)}</span>
             </button>
           ))}
-          <div className="text-[10px] text-amber-600/80 pt-0.5">변동액 100 mil VND 이상 + 전월비 ±{thr}% 이상. 클릭 → 해당 {groupNoun} 상세.</div>
+          <div className="text-[10px] text-amber-600/80 pt-0.5">변동액 {formatSmallMoney(100)} {smallMoneyLabel()} 이상 + 전월비 ±{thr}% 이상. 클릭 → 해당 {groupNoun} 상세.</div>
         </div>
       )}
     </div>
@@ -165,8 +166,8 @@ function ProfitCard({ year, rows, groupNoun, onPick }) {
             <thead>
               <tr className="text-rose-400/80 text-[11px] border-b border-rose-100">
                 <th className="text-left font-medium px-2 py-1.5">{t(groupNoun)}</th>
-                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? 'Rev bil VND' : '매출 bil VND'}</th>
-                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? 'OP mil VND' : '영업이익 mil VND'}</th>
+                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? `Rev ${largeMoneyLabel()}` : `매출 ${largeMoneyLabel()}`}</th>
+                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? `OP ${smallMoneyLabel()}` : `영업이익 ${smallMoneyLabel()}`}</th>
                 <th className="text-right font-medium px-2 py-1.5">{lang === 'en' ? 'OP%' : '영업이익률'}</th>
                 <th className="text-right font-medium px-2 py-1.5">{lang === 'en' ? 'GP%' : '매출이익률'}</th>
               </tr>
@@ -200,10 +201,10 @@ function ListTable({ year, rows, anomalyCount, groupNoun, onPick }) {
           <thead>
             <tr className="text-slate-400 text-xs border-b border-slate-100">
               <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white">{t(groupNoun)}</th>
-              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출', 'Revenue')}<span className="block text-[8px] text-slate-300">{U('bil VND', 'bil VND')}</span></th>
+              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출', 'Revenue')}<span className="block text-[8px] text-slate-300">{U(`${largeMoneyLabel()}`, `${largeMoneyLabel()}`)}</span></th>
               <th className="text-right font-medium px-2.5 py-2">{U('전년비', 'YoY')}</th>
-              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('직접원가', 'Direct Cost')}<span className="block text-[8px] text-slate-300">{U('bil VND', 'bil VND')}</span></th>
-              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출이익', 'Gross Profit')}<span className="block text-[8px] text-slate-300">{U('mil VND', 'mil VND')}</span></th>
+              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('직접원가', 'Direct Cost')}<span className="block text-[8px] text-slate-300">{U(`${largeMoneyLabel()}`, `${largeMoneyLabel()}`)}</span></th>
+              <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출이익', 'Gross Profit')}<span className="block text-[8px] text-slate-300">{U(`${smallMoneyLabel()}`, `${smallMoneyLabel()}`)}</span></th>
               <th className="text-right font-medium px-2.5 py-2">{U('이익률', 'Margin')}</th>
               <th className="text-center font-medium px-2 py-2">{U('점검', 'Check')}</th>
             </tr>
@@ -251,12 +252,12 @@ function Detail({ year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
   const ranked = itemRanking(v, year);
 
   const PL = [
-    { k: 'revenue', label: '매출', f: eok, unit: 'bil', bold: true },
-    { k: 'directCost', label: '직접원가', f: eok, unit: 'bil' },
-    { k: 'directProfit', label: '직접이익', f: mn, unit: 'mil' },
-    { k: 'indirectCost', label: '간접원가', f: mn, unit: 'mil' },
-    { k: 'grossProfit', label: '매출이익', f: mn, unit: 'mil' },
-    { k: 'opProfit', label: '영업이익', f: mn, unit: 'mil', bold: true },
+    { k: 'revenue', label: '매출', f: eok, unit: largeMoneyLabel(), bold: true },
+    { k: 'directCost', label: '직접원가', f: eok, unit: largeMoneyLabel() },
+    { k: 'directProfit', label: '직접이익', f: mn, unit: smallMoneyLabel() },
+    { k: 'indirectCost', label: '간접원가', f: mn, unit: smallMoneyLabel() },
+    { k: 'grossProfit', label: '매출이익', f: mn, unit: smallMoneyLabel() },
+    { k: 'opProfit', label: '영업이익', f: mn, unit: smallMoneyLabel(), bold: true },
   ];
   const months = Array.from({ length: 12 }, (_, i) => i);
   const segAvail = clff === 'CL';
@@ -315,7 +316,7 @@ function Detail({ year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
           <table className="text-sm min-w-full">
             <thead>
               <tr className="text-slate-400 text-xs border-b border-slate-100">
-                <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white whitespace-nowrap">원가 항목<span className="block text-[9px] text-slate-300">mil VND</span></th>
+                <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white whitespace-nowrap">원가 항목<span className="block text-[9px] text-slate-300">{smallMoneyLabel()}</span></th>
                 {months.map((i) => <th key={i} className={`text-right font-medium px-2 py-2 ${i >= n ? 'text-slate-200' : ''}`}>{i + 1}월</th>)}
                 <th className="text-right font-medium px-2.5 py-2 bg-slate-50">YTD</th>
               </tr>
@@ -346,7 +347,7 @@ function Detail({ year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
             </tbody>
           </table>
         </div>
-        <div className="text-[10px] text-slate-400 mt-1.5">큰 항목 순 · 셀 색칠 = 전월비 ±{thr}% 이상이며 변동액 100 mil VND 초과 → 운영팀 점검 대상</div>
+        <div className="text-[10px] text-slate-400 mt-1.5">큰 항목 순 · 셀 색칠 = 전월비 ±{thr}% 이상이며 변동액 {formatSmallMoney(100)} {smallMoneyLabel()} 초과 → 운영팀 점검 대상</div>
       </Card>
     </div>
   );
