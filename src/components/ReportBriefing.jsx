@@ -1,3 +1,4 @@
+import { localizeText, translateDisplay } from "../lib/i18n";
 import { useEffect, useMemo, useState } from 'react';
 import {
   entityDetails, marginDiagnosis, costItemCompare, costItemContributors,
@@ -312,7 +313,7 @@ function MiniRatioChart({ rows = [], baseline, thresholdPp, item, L }) {
           ))}
         </svg>
         <div className="min-w-[64px] text-right text-[10px] text-slate-500">
-          <div className="font-semibold text-slate-700">{last ? `${last.month}월 ${ratio(last.ratio)}` : '-'}</div>
+          <div className="font-semibold text-slate-700">{last ? translateDisplay(`${last.month}월 ${ratio(last.ratio)}`) : '-'}</div>
           <div>{L('상한', 'upper')} {ratio(baseline + thresholdPp)}</div>
           <div>{L('하한', 'lower')} {ratio(baseline - thresholdPp)}</div>
         </div>
@@ -444,8 +445,8 @@ function loadNotesHistory(currentKey) {
           noteKey,
           current: noteKey === currentKey,
           confirmed,
-          label: `${cy || '-'}년 ${cm || '-'}월 · ${region || '-'} · ${clff || '-'} · ${subtype || '-'}`,
-          compare: `${by || '-'}년 ${bm || '-'}월 대비`,
+          label: translateDisplay(`${cy || '-'}년 ${cm || '-'}월 · ${region || '-'} · ${clff || '-'} · ${subtype || '-'}`),
+          compare: translateDisplay(`${by || '-'}년 ${bm || '-'}월 대비`),
           source: 'local',
           notes: value,
         };
@@ -501,7 +502,7 @@ function reportConclusion(d, L) {
 
 export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMode = '상세' }) {
   const { lang } = useLang();
-  const L = (ko, en) => (lang === 'en' ? en : ko);
+  const L = (ko, en) => (localizeText(ko, en, lang));
   const isSummary = viewMode === '요약';
   const isDetail = viewMode === '상세';
   const biz = subtypeToBiz(subtype);
@@ -924,27 +925,27 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       ? [
         `[${item.title}]`,
         item.evidence,
-        item.warehouseDetail ? `어디 창고: ${item.warehouseDetail}` : '',
-        item.customerDetail ? `어느 고객사: ${item.customerDetail}` : '',
-        `보고 메모: ${item.question}`,
+        item.warehouseDetail ? translateDisplay(`어디 창고: ${item.warehouseDetail}`) : '',
+        item.customerDetail ? translateDisplay(`어느 고객사: ${item.customerDetail}`) : '',
+        translateDisplay(`보고 메모: ${item.question}`),
       ].filter(Boolean).join('\n')
       : copyMode === 'mail'
         ? [
-          `[확인 요청] ${item.title}`,
+          translateDisplay(`[확인 요청] ${item.title}`),
           '',
           '안녕하세요. 아래 항목의 변동 사유 확인 부탁드립니다.',
           item.evidence,
-          item.warehouseDetail ? `관련 창고: ${item.warehouseDetail}` : '',
-          item.customerDetail ? `관련 고객사: ${item.customerDetail}` : '',
-          `확인 요청사항: ${item.question}`,
+          item.warehouseDetail ? translateDisplay(`관련 창고: ${item.warehouseDetail}`) : '',
+          item.customerDetail ? translateDisplay(`관련 고객사: ${item.customerDetail}`) : '',
+          translateDisplay(`확인 요청사항: ${item.question}`),
           '확인 후 실제 사유, 관련 기간, 근거 금액이 있다면 함께 회신 부탁드립니다.',
         ].filter(Boolean).join('\n')
         : [
-          `[확인요청] ${item.title}`,
+          translateDisplay(`[확인요청] ${item.title}`),
           item.evidence,
-          item.warehouseDetail ? `창고: ${item.warehouseDetail}` : '',
-          item.customerDetail ? `고객사: ${item.customerDetail}` : '',
-          `확인: ${item.question}`,
+          item.warehouseDetail ? translateDisplay(`창고: ${item.warehouseDetail}`) : '',
+          item.customerDetail ? translateDisplay(`고객사: ${item.customerDetail}`) : '',
+          translateDisplay(`확인: ${item.question}`),
         ].filter(Boolean).join('\n');
     const ok = await copyText(text);
     setCopiedId(ok ? item.id : `fail:${item.id}`);
@@ -963,7 +964,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     ].filter(Boolean);
     const text = copyMode === 'report'
       ? [
-        `[보고용] ${item.title}`,
+        translateDisplay(`[보고용] ${item.title}`),
         ...common,
         L(
           `${row.name}은(는) ${verdict.label} 대상으로, 담당자 확인 후 실제 사유를 보고 메모에 반영합니다.`,
@@ -972,7 +973,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       ].join('\n')
       : copyMode === 'mail'
         ? [
-          `[확인 요청] ${item.title}`,
+          translateDisplay(`[확인 요청] ${item.title}`),
           '',
           '안녕하세요. 아래 대상의 변동 사유 확인 부탁드립니다.',
           ...common,
@@ -982,7 +983,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
           ),
         ].join('\n')
         : [
-          `[확인요청] ${item.title}`,
+          translateDisplay(`[확인요청] ${item.title}`),
           ...common,
           L(
             `${row.name} 변동 사유 확인 부탁드립니다. 물량/작업시간/단가/계약/배부/일회성/누락/이월 중 어떤 요인인지, 가능하면 수량 효과와 단가 효과를 나눠 알려주세요.`,
@@ -1015,7 +1016,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
           `- ${L('대표 고객사', 'Top customer')}: ${item.topCustomer}`,
           `- ${L('근거', 'Evidence')}: ${item.evidence}`,
           copyMode === 'report'
-            ? `- ${L('보고 메모', 'Report note')}: 담당자 확인 후 실제 사유를 반영합니다.`
+            ? translateDisplay(`- ${L('보고 메모', 'Report note')}: 담당자 확인 후 실제 사유를 반영합니다.`)
             : `- ${L('요청', 'Request')}: ${item.question} ${L('확인 후 실제 사유와 근거 금액/기간을 회신 부탁드립니다.', 'Please reply with the confirmed reason and supporting amount/period.')}`,
         ].join('\n');
       }),

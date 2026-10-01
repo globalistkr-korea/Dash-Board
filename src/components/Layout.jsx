@@ -1,3 +1,4 @@
+import { localizeText, translateDisplay } from "../lib/i18n";
 import { BarChart2, Users, Warehouse, FileText, TrendingUp, RefreshCw } from 'lucide-react';
 import { useLang } from '../context/LangContext';
 import { useVersionCheck, applyUpdate } from '../lib/useVersionCheck';
@@ -11,26 +12,19 @@ const NAV_ITEMS = [
 
 function CurrencyToggle() {
   const { currency, toggleCurrency } = useLang();
-  return <button onClick={toggleCurrency} aria-label="통화 전환" aria-pressed={currency === 'krw'}
+  return <button onClick={toggleCurrency} aria-label={translateDisplay("통화 전환")} aria-pressed={currency === 'krw'}
     className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-blue-700/60 hover:bg-blue-700 text-xs font-semibold text-white"
-    title="원화 / 베트남동 전환 · 원화는 참고 환율 1 VND = 0.056원">
-    <span className={currency === 'krw' ? 'text-white' : 'text-blue-300'}>원</span><span className="text-blue-400">/</span><span className={currency === 'vnd' ? 'text-white' : 'text-blue-300'}>동</span>
+    title={translateDisplay("원화 / 베트남동 전환 · 원화는 참고 환율 1 VND = 0.056원")}>
+    <span className={currency === 'krw' ? 'text-white' : 'text-blue-300'}>{translateDisplay("원")}</span><span className="text-blue-400">/</span><span className={currency === 'vnd' ? 'text-white' : 'text-blue-300'}>{translateDisplay("동")}</span>
   </button>;
 }
 
 function LangToggle() {
-  const { lang, toggleLang } = useLang();
-  return (
-    <button
-      onClick={toggleLang}
-      className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-700/60 hover:bg-blue-700 text-xs font-semibold text-white transition-colors"
-      title="언어 전환 (한국어 ↔ English)"
-    >
-      <span className={lang === 'ko' ? 'text-white' : 'text-blue-300'}>한</span>
-      <span className="text-blue-400">/</span>
-      <span className={lang === 'en' ? 'text-white' : 'text-blue-300'}>EN</span>
-    </button>
-  );
+  const { lang, setLang } = useLang();
+  return <div role="group" aria-label="한국어 / English / Tiếng Việt" className="flex items-center rounded-full bg-blue-700/60 p-0.5 text-xs font-semibold">
+    {[['ko','한','한국어'],['en','EN','English'],['vi','VI','Tiếng Việt']].map(([value,label,name]) => <button key={value} onClick={() => setLang(value)} aria-label={name} aria-pressed={lang === value}
+      className={`rounded-full px-2 py-1 transition-colors ${lang === value ? 'bg-white text-blue-800' : 'text-blue-200 hover:text-white'}`}>{label}</button>)}
+  </div>;
 }
 
 // (구)UnitToggle: 소비하는 화면이 없어 아무 효과가 없던 죽은 토글 — 제거(2026-07).
@@ -44,12 +38,12 @@ function UpdateBanner() {
     <div className="bg-emerald-600 text-white">
       <div className="max-w-screen-xl mx-auto px-4 py-2 flex items-center justify-center gap-3 text-sm">
         <RefreshCw className="w-4 h-4 shrink-0" />
-        <span className="font-medium">{lang === 'en' ? 'A new version is available.' : '새 버전이 있습니다.'}</span>
+        <span className="font-medium">{localizeText('새 버전이 있습니다.', 'A new version is available.', lang)}</span>
         <button
           onClick={applyUpdate}
           className="ml-1 rounded-full bg-white text-emerald-700 font-bold px-3 py-1 text-xs hover:bg-emerald-50 transition-colors"
         >
-          {lang === 'en' ? 'Update' : '업데이트'}
+          {localizeText('업데이트', 'Update', lang)}
         </button>
       </div>
     </div>
@@ -66,7 +60,7 @@ export default function Layout({ currentPage, onNavigate, children }) {
         <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <BarChart2 className="w-6 h-6 text-blue-200 shrink-0" />
-            <span className="font-bold text-sm sm:text-lg tracking-tight truncate">대한통운 북부 대시보드</span>
+            <span className="font-bold text-sm sm:text-lg tracking-tight truncate">{translateDisplay("대한통운 북부 대시보드")}</span>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
@@ -89,7 +83,7 @@ export default function Layout({ currentPage, onNavigate, children }) {
           </div>
         </div>
       </header>
-      {currency === 'krw' && <div className="bg-blue-50 text-blue-700 text-center px-3 py-1 text-[11px]">원화 환산 · 참고 환율 1 VND = 0.056원(고정, 실시간 아님) · 원본·분석 기준은 VND</div>}
+      {currency === 'krw' && <div className="bg-blue-50 text-blue-700 text-center px-3 py-1 text-[11px]">{translateDisplay("원화 환산 · 참고 환율 1 VND = 0.056원(고정, 실시간 아님) · 원본·분석 기준은 VND")}</div>}
 
       {/* 메인 */}
       <main className="flex-1 max-w-screen-xl mx-auto w-full px-3 sm:px-4 py-4 pb-24 md:pb-6">

@@ -1,3 +1,4 @@
+import { localizeText, translateDisplay } from "../lib/i18n";
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { warehouseMaster, clientContracts, vendors } from '../lib/aggregate';
@@ -45,7 +46,7 @@ export default function ContractPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-bold text-slate-800">{t('계약 정보')}</h1>
-      <p className="text-xs text-amber-700">계약자료는 이전 원본을 유지합니다. 새 Customer PNL 시트에는 계약 정보가 포함되어 있지 않습니다.</p>
+      <p className="text-xs text-amber-700">{translateDisplay("계약자료는 이전 원본을 유지합니다. 새 Customer PNL 시트에는 계약 정보가 포함되어 있지 않습니다.")}</p>
 
       <div className="flex gap-1.5">
         {TABS.map((tb) => (
@@ -65,14 +66,14 @@ export default function ContractPage() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={lang === 'en' ? 'Search name / warehouse / content' : '이름·창고·내용 검색'}
+          placeholder={localizeText('이름·창고·내용 검색', 'Search name / warehouse / content', lang)}
           className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
         />
       </div>
 
       <div className="space-y-2">
         {rows.length === 0 && (
-          <div className="text-center text-slate-400 text-sm py-8">{lang === 'en' ? 'No results.' : '검색 결과가 없습니다.'}</div>
+          <div className="text-center text-slate-400 text-sm py-8">{localizeText('검색 결과가 없습니다.', 'No results.', lang)}</div>
         )}
         {rows.map((r, i) => {
           const id = `${tab}-${i}`;

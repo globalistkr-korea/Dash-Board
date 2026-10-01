@@ -1,25 +1,24 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, useSyncExternalStore } from 'react';
+import { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
 import { getCurrency, subscribeCurrency, setCurrency } from '../lib/currency';
 import { EN, CONTRACT_KO } from '../lib/labels';
+import { CONTRACT_VI } from '../lib/vi';
+import { getLanguage, setLanguage, subscribeLanguage, translateDisplay } from '../lib/i18n';
 
 const LangContext = createContext(null);
-const KEY = 'vn_dashboard_lang';
-const initLang = () => {
-  try { const s = localStorage.getItem(KEY); return s === 'en' ? 'en' : 'ko'; } catch { return 'ko'; }
-};
 
 export function LangProvider({ children }) {
   const currency = useSyncExternalStore(subscribeCurrency, getCurrency, () => 'vnd');
   const toggleCurrency = () => setCurrency(currency === 'vnd' ? 'krw' : 'vnd');
-  const [lang, setLang] = useState(initLang); // 'ko' | 'en'
-  useEffect(() => { localStorage.setItem(KEY, lang); }, [lang]);
-  const toggleLang = () => setLang((l) => (l === 'ko' ? 'en' : 'ko'));
+  const lang = useSyncExternalStore(subscribeLanguage, getLanguage, () => 'ko');
+  const setLang = setLanguage;
+  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+  const toggleLang = () => setLang(lang === 'ko' ? 'en' : lang === 'en' ? 'vi' : 'ko');
 
   // 한글-원본 라벨 → 선택 언어
-  const t = (ko) => (lang === 'en' ? (EN[ko] || ko) : ko);
+  const t = (ko) => lang === 'en' ? (EN[ko] || ko) : translateDisplay(ko);
   // 영문-원본(계약 필드) → 선택 언어
-  const tf = (enKey) => (lang === 'ko' ? (CONTRACT_KO[enKey] || enKey) : enKey);
+  const tf = (enKey) => lang === 'vi' ? (CONTRACT_VI[enKey] || translateDisplay(enKey)) : lang === 'ko' ? (CONTRACT_KO[enKey] || enKey) : enKey;
 
   return (
     <LangContext.Provider value={{ lang, setLang, toggleLang, t, tf, currency, toggleCurrency }}>

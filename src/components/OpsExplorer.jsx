@@ -1,3 +1,4 @@
+import { localizeText, translateDisplay } from "../lib/i18n";
 import { useState, useMemo } from 'react';
 import {
   OPS_YEARS, OPS_CURRENT, opsActualCount, OPS_SOURCE,
@@ -78,11 +79,11 @@ export default function OpsExplorer({ kind, groupNoun }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-slate-800">{t(groupNoun)} <span className="text-sm font-normal text-slate-400">{OPS_YEARS.join('·')}</span></h1>
-        <span className="text-xs text-slate-400">{year}년 {opsActualCount(year)}월까지 실적 · 매출 {largeMoneyLabel()} · 원가 {smallMoneyLabel()}</span>
+        <span className="text-xs text-slate-400">{year}{translateDisplay("년 ")}{opsActualCount(year)}{translateDisplay("월까지 실적 · 매출 ")}{largeMoneyLabel()}{translateDisplay(" · 원가 ")}{smallMoneyLabel()}</span>
       </div>
 
-      <div className="flex gap-1.5 flex-wrap">{OPS_YEARS.map(y => <Chip key={y} active={year === y} onClick={() => changeYear(y)}>{y}년</Chip>)}</div>
-      {Number(year) <= 2024 && <p className="text-xs text-amber-700">지역·세부 사업 구분이 누락된 연도입니다. 전체 기준으로 조회합니다.</p>}
+      <div className="flex gap-1.5 flex-wrap">{OPS_YEARS.map(y => <Chip key={y} active={year === y} onClick={() => changeYear(y)}>{y}{translateDisplay("년")}</Chip>)}</div>
+      {Number(year) <= 2024 && <p className="text-xs text-amber-700">{translateDisplay("지역·세부 사업 구분이 누락된 연도입니다. 전체 기준으로 조회합니다.")}</p>}
       {/* 필터: 지역 / 사업 / (CL일 때) 구분 */}
       <div className="space-y-1.5 text-xs">
         <div className="flex items-center gap-2 flex-wrap"><FLabel ko="지역" />
@@ -94,8 +95,8 @@ export default function OpsExplorer({ kind, groupNoun }) {
             {BIZS.map((b) => <Chip key={b} active={biz === b} onClick={() => { setBiz(b); setSel(null); }}>{b}</Chip>)}</div>
         )}
       </div>
-      <div className="text-[11px] text-slate-400">현재 보기: <b className="text-slate-600">{scope}</b></div>
-      <p className="text-[11px] text-slate-500">급증·0원 전환에는 창고·고객 명칭 변경이나 비용 이관도 포함될 수 있습니다. 실제 누락 여부는 원본 확인이 필요합니다.</p>
+      <div className="text-[11px] text-slate-400">{translateDisplay("현재 보기: ")}<b className="text-slate-600">{scope}</b></div>
+      <p className="text-[11px] text-slate-500">{translateDisplay("급증·0원 전환에는 창고·고객 명칭 변경이나 비용 이관도 포함될 수 있습니다. 실제 누락 여부는 원본 확인이 필요합니다.")}</p>
 
       <OpsAlertCard topAnoms={topAnoms} thr={thr} setThr={setThr} onPick={setSel} groupNoun={groupNoun} />
       <ProfitCard year={year} rows={rows} groupNoun={groupNoun} onPick={setSel} />
@@ -104,7 +105,7 @@ export default function OpsExplorer({ kind, groupNoun }) {
         ? <ListTable year={year} rows={rows} anomalyCount={anomalyCount} groupNoun={groupNoun} onPick={setSel} />
         : <Detail year={year} setYear={changeYear} e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} />}
 
-      <p className="text-[11px] text-slate-400 text-center">출처: {OPS_SOURCE?.title} · 2023·2024년 지역·세부 사업 미지정 · 참고용, 원본과 교차확인 권장</p>
+      <p className="text-[11px] text-slate-400 text-center">{translateDisplay("출처: ")}{OPS_SOURCE?.title}{translateDisplay(" · 2023·2024년 지역·세부 사업 미지정 · 참고용, 원본과 교차확인 권장")}</p>
     </div>
   );
 }
@@ -114,16 +115,14 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
   return (
     <div className="bg-amber-50/70 rounded-xl border border-amber-100 p-3">
       <div className="flex items-center justify-between">
-        <button onClick={() => setOpen((o) => !o)} className="text-xs font-semibold text-amber-800">
-          ⚠️ 원가 급변 점검 {topAnoms.length ? `· ${topAnoms.length}건+` : '· 없음'} {open ? '' : '(펼치기)'}
+        <button onClick={() => setOpen((o) => !o)} className="text-xs font-semibold text-amber-800">{translateDisplay(" ⚠️ 원가 급변 점검 ")}{topAnoms.length ? translateDisplay(`· ${topAnoms.length}건+`) : '· 없음'} {open ? '' : '(펼치기)'}
         </button>
-        <label className="text-[11px] text-amber-700 flex items-center gap-1">
-          전월비 임계 <input type="range" min="20" max="80" step="5" value={thr} onChange={(e) => setThr(+e.target.value)} className="w-20 accent-amber-600" /> <b>±{thr}%</b>
+        <label className="text-[11px] text-amber-700 flex items-center gap-1">{translateDisplay(" 전월비 임계 ")}<input type="range" min="20" max="80" step="5" value={thr} onChange={(e) => setThr(+e.target.value)} className="w-20 accent-amber-600" /> <b>±{thr}%</b>
         </label>
       </div>
       {open && (
         <div className="mt-2 space-y-1">
-          {topAnoms.length === 0 && <div className="text-[12px] text-amber-700">{formatSmallMoney(100)} {smallMoneyLabel()} 이상 변동 없음.</div>}
+          {topAnoms.length === 0 && <div className="text-[12px] text-amber-700">{formatSmallMoney(100)} {smallMoneyLabel()}{translateDisplay(" 이상 변동 없음.")}</div>}
           {topAnoms.map((a, i) => (
             <button key={i} onClick={() => onPick(a.entity)}
               className="flex items-center gap-2 w-full text-left text-[12px] hover:bg-amber-100/60 rounded px-1.5 py-1">
@@ -135,7 +134,7 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
               <span className="text-slate-400 ml-auto tabular-nums shrink-0">{mn(a.prev)}→{mn(a.cur)}</span>
             </button>
           ))}
-          <div className="text-[10px] text-amber-600/80 pt-0.5">변동액 {formatSmallMoney(100)} {smallMoneyLabel()} 이상 + 전월비 ±{thr}% 이상. 클릭 → 해당 {groupNoun} 상세.</div>
+          <div className="text-[10px] text-amber-600/80 pt-0.5">{translateDisplay("변동액 ")}{formatSmallMoney(100)} {smallMoneyLabel()}{translateDisplay(" 이상 + 전월비 ±")}{thr}{translateDisplay("% 이상. 클릭 → 해당 ")}{groupNoun}{translateDisplay(" 상세.")}</div>
         </div>
       )}
     </div>
@@ -158,7 +157,7 @@ function ProfitCard({ year, rows, groupNoun, onPick }) {
   return (
     <div className="bg-rose-50/60 rounded-xl border border-rose-100 p-3">
       <button onClick={() => setOpen((o) => !o)} className="text-xs font-semibold text-rose-800">
-        🩺 {lang === 'en' ? 'Profitability watch' : '수익성 점검'} · {lang === 'en' ? 'lowest OP margin' : '영업이익률 낮은 순'} {open ? '' : '(펼치기)'}
+        🩺 {localizeText('수익성 점검', 'Profitability watch', lang)} · {localizeText('영업이익률 낮은 순', 'lowest OP margin', lang)} {open ? '' : '(펼치기)'}
       </button>
       {open && (
         <div className="mt-2 overflow-x-auto scrollbar-thin">
@@ -166,10 +165,10 @@ function ProfitCard({ year, rows, groupNoun, onPick }) {
             <thead>
               <tr className="text-rose-400/80 text-[11px] border-b border-rose-100">
                 <th className="text-left font-medium px-2 py-1.5">{t(groupNoun)}</th>
-                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? `Rev ${largeMoneyLabel()}` : `매출 ${largeMoneyLabel()}`}</th>
-                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{lang === 'en' ? `OP ${smallMoneyLabel()}` : `영업이익 ${smallMoneyLabel()}`}</th>
-                <th className="text-right font-medium px-2 py-1.5">{lang === 'en' ? 'OP%' : '영업이익률'}</th>
-                <th className="text-right font-medium px-2 py-1.5">{lang === 'en' ? 'GP%' : '매출이익률'}</th>
+                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{localizeText(`매출 ${largeMoneyLabel()}`, `Rev ${largeMoneyLabel()}`, lang)}</th>
+                <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{localizeText(`영업이익 ${smallMoneyLabel()}`, `OP ${smallMoneyLabel()}`, lang)}</th>
+                <th className="text-right font-medium px-2 py-1.5">{localizeText('영업이익률', 'OP%', lang)}</th>
+                <th className="text-right font-medium px-2 py-1.5">{localizeText('매출이익률', 'GP%', lang)}</th>
               </tr>
             </thead>
             <tbody>
@@ -184,7 +183,7 @@ function ProfitCard({ year, rows, groupNoun, onPick }) {
               ))}
             </tbody>
           </table>
-          <div className="text-[10px] text-rose-600/70 pt-1">{lang === 'en' ? 'Red = loss, amber = OP margin < 3%. Click to drill.' : '빨강=적자, 주황=영업이익률 3% 미만. 클릭 → 상세.'}</div>
+          <div className="text-[10px] text-rose-600/70 pt-1">{localizeText('빨강=적자, 주황=영업이익률 3% 미만. 클릭 → 상세.', 'Red = loss, amber = OP margin < 3%. Click to drill.', lang)}</div>
         </div>
       )}
     </div>
@@ -193,7 +192,7 @@ function ProfitCard({ year, rows, groupNoun, onPick }) {
 
 function ListTable({ year, rows, anomalyCount, groupNoun, onPick }) {
   const { t, lang } = useLang();
-  const U = (ko, en) => (lang === 'en' ? en : ko);
+  const U = (ko, en) => (localizeText(ko, en, lang));
   return (
     <Card title={`${t(groupNoun)} · ${year}`} hint={`${rows.length} · ${year}`}>
       <div className="overflow-x-auto scrollbar-thin">
@@ -269,7 +268,7 @@ function Detail({ year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
         <h2 className="text-base font-bold text-slate-800">{e.name}</h2>
         <span className="text-[11px] text-slate-400">{e.region}{e.segs?.length ? ' · ' + e.segs.join('/') : ''}</span>
         <div className="ml-auto flex gap-1">
-          {OPS_YEARS.map((y) => <Chip key={y} active={year === y} onClick={() => setYear(y)}>{y.slice(2)}년</Chip>)}
+          {OPS_YEARS.map((y) => <Chip key={y} active={year === y} onClick={() => setYear(y)}>{y.slice(2)}{translateDisplay("년")}</Chip>)}
         </div>
       </div>
 
@@ -280,14 +279,14 @@ function Detail({ year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
         </div>
       )}
 
-      <Card title="월별 손익" hint={`${year}년${clff === 'CL' && bizD !== '전체' ? ' · ' + bizD : ''}`}>
+      <Card title={translateDisplay("월별 손익")} hint={translateDisplay(`${year}년${clff === 'CL' && bizD !== '전체' ? ' · ' + bizD : ''}`)}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="text-sm min-w-full">
             <thead>
               <tr className="text-slate-400 text-xs border-b border-slate-100">
-                <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white">항목</th>
-                {months.map((i) => <th key={i} className={`text-right font-medium px-2 py-2 ${i >= n ? 'text-slate-200' : ''}`}>{i + 1}월</th>)}
-                <th className="text-right font-medium px-2.5 py-2 bg-slate-50">합계</th>
+                <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white">{translateDisplay("항목")}</th>
+                {months.map((i) => <th key={i} className={`text-right font-medium px-2 py-2 ${i >= n ? 'text-slate-200' : ''}`}>{i + 1}{translateDisplay("월")}</th>)}
+                <th className="text-right font-medium px-2.5 py-2 bg-slate-50">{translateDisplay("합계")}</th>
               </tr>
             </thead>
             <tbody>
@@ -311,13 +310,13 @@ function Detail({ year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
         </div>
       </Card>
 
-      <Card title="원가 항목 월별 모니터" hint={`${year}년 · 빨강=급증 파랑=급감 (100 mil↑ ±${thr}%)`}>
+      <Card title={translateDisplay("원가 항목 월별 모니터")} hint={translateDisplay(`${year}년 · 빨강=급증 파랑=급감 (100 mil↑ ±${thr}%)`)}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="text-sm min-w-full">
             <thead>
               <tr className="text-slate-400 text-xs border-b border-slate-100">
-                <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white whitespace-nowrap">원가 항목<span className="block text-[9px] text-slate-300">{smallMoneyLabel()}</span></th>
-                {months.map((i) => <th key={i} className={`text-right font-medium px-2 py-2 ${i >= n ? 'text-slate-200' : ''}`}>{i + 1}월</th>)}
+                <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white whitespace-nowrap">{translateDisplay("원가 항목")}<span className="block text-[9px] text-slate-300">{smallMoneyLabel()}</span></th>
+                {months.map((i) => <th key={i} className={`text-right font-medium px-2 py-2 ${i >= n ? 'text-slate-200' : ''}`}>{i + 1}{translateDisplay("월")}</th>)}
                 <th className="text-right font-medium px-2.5 py-2 bg-slate-50">YTD</th>
               </tr>
             </thead>
@@ -343,11 +342,11 @@ function Detail({ year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
                   </tr>
                 );
               })}
-              {ranked.length === 0 && <tr><td className="px-3 py-4 text-center text-slate-400 text-sm" colSpan={14}>원가 데이터가 없습니다.</td></tr>}
+              {ranked.length === 0 && <tr><td className="px-3 py-4 text-center text-slate-400 text-sm" colSpan={14}>{translateDisplay("원가 데이터가 없습니다.")}</td></tr>}
             </tbody>
           </table>
         </div>
-        <div className="text-[10px] text-slate-400 mt-1.5">큰 항목 순 · 셀 색칠 = 전월비 ±{thr}% 이상이며 변동액 {formatSmallMoney(100)} {smallMoneyLabel()} 초과 → 운영팀 점검 대상</div>
+        <div className="text-[10px] text-slate-400 mt-1.5">{translateDisplay("큰 항목 순 · 셀 색칠 = 전월비 ±")}{thr}{translateDisplay("% 이상이며 변동액 ")}{formatSmallMoney(100)} {smallMoneyLabel()}{translateDisplay(" 초과 → 운영팀 점검 대상")}</div>
       </Card>
     </div>
   );

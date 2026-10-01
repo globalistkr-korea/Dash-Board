@@ -1,3 +1,4 @@
+import { localizeText, translateDisplay } from "../lib/i18n";
 import { lazy, Suspense, useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
@@ -66,8 +67,8 @@ export default function PlanPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-slate-800">{lang === 'en' ? 'P&L Actual' : '경영실적'} <span className="text-sm font-normal text-slate-400">{YEARS.join(' · ')}</span></h1>
-        <span className="text-xs text-slate-400">{`${CURRENT_YEAR}년 ${actualCount(CURRENT_YEAR)}월까지 입력 실적 · 이후 미입력`}</span>
+        <h1 className="text-lg font-bold text-slate-800">{localizeText('경영실적', 'P&L Actual', lang)} <span className="text-sm font-normal text-slate-400">{YEARS.join(' · ')}</span></h1>
+        <span className="text-xs text-slate-400">{translateDisplay(`${CURRENT_YEAR}년 ${actualCount(CURRENT_YEAR)}월까지 입력 실적 · 이후 미입력`)}</span>
       </div>
 
       {/* 연간 / 월간 모드 */}
@@ -107,21 +108,21 @@ export default function PlanPage() {
         {subOpts.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap text-xs">
             <FilterLabel ko="세부" en="Detail" />
-            <Chip active={subtype === '전체'} onClick={() => setSubtype('전체')}>전체</Chip>
+            <Chip active={subtype === '전체'} onClick={() => setSubtype('전체')}>{translateDisplay("전체")}</Chip>
             {subOpts.map((s) => <Chip key={s} active={subtype === s} onClick={() => setSubtype(s)}>{s}</Chip>)}
           </div>
         )}
       </div>
 
-      <div className="text-[11px] text-slate-400">현재 보기: <b className="text-slate-600">{scopeLabel}</b> · 매출·매출원가 {largeMoneyLabel()} / 이익 {smallMoneyLabel()} · 매출원가=매출−매출이익(직접+간접원가)</div>
+      <div className="text-[11px] text-slate-400">{translateDisplay("현재 보기: ")}<b className="text-slate-600">{scopeLabel}</b>{translateDisplay(" · 매출·매출원가 ")}{largeMoneyLabel()}{translateDisplay(" / 이익 ")}{smallMoneyLabel()}{translateDisplay(" · 매출원가=매출−매출이익(직접+간접원가)")}</div>
       <details className="rounded-xl border border-amber-100 bg-amber-50/50 p-3 text-xs text-slate-600">
-        <summary className="cursor-pointer font-semibold">원본·연도별 품질 확인 · 2026년 8월까지 · 과거 지역 구분 확인 필요</summary>
+        <summary className="cursor-pointer font-semibold">{translateDisplay("원본·연도별 품질 확인 · 2026년 8월까지 · 과거 지역 구분 확인 필요")}</summary>
         <div className="overflow-x-auto mt-2"><table className="w-full text-left">
-          <thead><tr className="border-b border-amber-100"><th className="p-2">연도</th><th className="p-2">입력 월</th><th className="p-2">지역 구분</th><th className="p-2">이익 산식 불일치 행</th></tr></thead>
-          <tbody>{YEARS.map((y) => <tr key={y} className="border-b border-amber-100/50"><td className="p-2">{y}</td><td className="p-2">1~{actualCount(y)}월</td><td className="p-2">{Number(y) <= 2024 ? '원본 누락 · 전체 조회' : '북부·남부·미지정'}</td><td className="p-2">직접이익 {quality.identityMismatchRows[`${y}:directProfit`] || 0} / 매출이익 {quality.identityMismatchRows[`${y}:grossProfit`] || 0}</td></tr>)}</tbody>
+          <thead><tr className="border-b border-amber-100"><th className="p-2">{translateDisplay("연도")}</th><th className="p-2">{translateDisplay("입력 월")}</th><th className="p-2">{translateDisplay("지역 구분")}</th><th className="p-2">{translateDisplay("이익 산식 불일치 행")}</th></tr></thead>
+          <tbody>{YEARS.map((y) => <tr key={y} className="border-b border-amber-100/50"><td className="p-2">{y}</td><td className="p-2">1~{actualCount(y)}{translateDisplay("월")}</td><td className="p-2">{Number(y) <= 2024 ? '원본 누락 · 전체 조회' : '북부·남부·미지정'}</td><td className="p-2">{translateDisplay("직접이익 ")}{quality.identityMismatchRows[`${y}:directProfit`] || 0}{translateDisplay(" / 매출이익 ")}{quality.identityMismatchRows[`${y}:grossProfit`] || 0}</td></tr>)}</tbody>
         </table></div>
-        <p className="mt-2">불일치 행도 원본 이익값을 유지했습니다. 조정·누락 등 실제 사유는 확인 필요합니다. 창고·고객 명칭 변경은 임의 병합하지 않아 급감·신규 알림으로 나타날 수 있습니다. 계획 데이터는 이번 원본에 없어 목표 달성률을 제공하지 않습니다.</p>
-        <p className="mt-1">갱신: {PLAN_SOURCE?.importedAt?.slice(0, 10)} · 시트 실시간 동기화가 아닌 가져온 데이터 기준</p>
+        <p className="mt-2">{translateDisplay("불일치 행도 원본 이익값을 유지했습니다. 조정·누락 등 실제 사유는 확인 필요합니다. 창고·고객 명칭 변경은 임의 병합하지 않아 급감·신규 알림으로 나타날 수 있습니다. 계획 데이터는 이번 원본에 없어 목표 달성률을 제공하지 않습니다.")}</p>
+        <p className="mt-1">{translateDisplay("갱신: ")}{PLAN_SOURCE?.importedAt?.slice(0, 10)}{translateDisplay(" · 시트 실시간 동기화가 아닌 가져온 데이터 기준")}</p>
       </details>
 
       {HAS_PLAN && <InsightCard clff={clff} region={region} />}
@@ -135,7 +136,7 @@ export default function PlanPage() {
 
       <ConstituentCard year={year} clff={clff} region={region} />
 
-      <p className="text-[11px] text-slate-400 text-center">출처: {PLAN_SOURCE?.title} · Direct Profit=직접이익 / Gross Profit=매출이익 · 참고용, 원본과 교차확인 권장</p>
+      <p className="text-[11px] text-slate-400 text-center">{translateDisplay("출처: ")}{PLAN_SOURCE?.title}{translateDisplay(" · Direct Profit=직접이익 / Gross Profit=매출이익 · 참고용, 원본과 교차확인 권장")}</p>
     </div>
   );
 }
@@ -168,14 +169,14 @@ function ConstituentCard({ clff, region, year }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3">
       <div className="flex items-baseline justify-between mb-2">
-        <span className="text-sm font-semibold text-slate-700">{lang === 'en' ? 'Top constituents' : '구성 Top'} <span className="text-[11px] font-normal text-slate-400">{lang === 'en' ? 'who drives this' : '이 숫자=누가'}</span></span>
+        <span className="text-sm font-semibold text-slate-700">{localizeText('구성 Top', 'Top constituents', lang)} <span className="text-[11px] font-normal text-slate-400">{localizeText('이 숫자=누가', 'who drives this', lang)}</span></span>
         <span className="text-[11px] text-slate-400">{year} · {largeMoneyLabel()}</span>
       </div>
       <div className="flex gap-4 flex-wrap">
-        <ConstituentCol title={lang === 'en' ? 'Top Customers' : '고객 Top 5'} list={cust} />
-        <ConstituentCol title={lang === 'en' ? 'Top Warehouses' : '창고 Top 5'} list={wh} />
+        <ConstituentCol title={localizeText('고객 Top 5', 'Top Customers', lang)} list={cust} />
+        <ConstituentCol title={localizeText('창고 Top 5', 'Top Warehouses', lang)} list={wh} />
       </div>
-      <div className="text-[10px] text-slate-400 mt-1.5">동일 PNL 원본 · 선택 연도 입력 실적 누계 기준 · 고객명 표기 차이는 원본대로 유지</div>
+      <div className="text-[10px] text-slate-400 mt-1.5">{translateDisplay("동일 PNL 원본 · 선택 연도 입력 실적 누계 기준 · 고객명 표기 차이는 원본대로 유지")}</div>
     </div>
   );
 }
@@ -195,7 +196,7 @@ function InsightCard({ clff, region }) {
   return (
     <div className="bg-blue-50/60 rounded-xl border border-blue-100 p-3">
       <button onClick={() => setOpen((o) => !o)} className="flex items-center justify-between w-full">
-        <span className="text-xs font-semibold text-blue-800">인사이트 {open ? '' : `· ${items.length}건`}</span>
+        <span className="text-xs font-semibold text-blue-800">{translateDisplay("인사이트 ")}{open ? '' : translateDisplay(`· ${items.length}건`)}</span>
         <span className="text-[11px] text-blue-400">{open ? '접기 ▲' : '펼치기 ▼'}</span>
       </button>
       {open && (
@@ -212,12 +213,12 @@ function InsightCard({ clff, region }) {
             <BarChart width={180} height={80} data={mini} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
               <XAxis dataKey="year" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
               <YAxis hide />
-              <Tooltip formatter={(v, n) => n === '매출' ? [`${v.toLocaleString('ko-KR')}억`, '매출'] : v} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+              <Tooltip formatter={(v, n) => n === '매출' ? [translateDisplay(`${v.toLocaleString('ko-KR')}억`), '매출'] : v} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
               <Bar dataKey="매출" radius={[3, 3, 0, 0]}>
                 {mini.map((b) => <Cell key={b.key} fill={YEAR_COLOR[b.key]} />)}
               </Bar>
             </BarChart>
-            <div className="text-[9px] text-slate-400 text-center -mt-1">참고: 매출 추이(십억동)</div>
+            <div className="text-[9px] text-slate-400 text-center -mt-1">{translateDisplay("참고: 매출 추이(십억동)")}</div>
           </div>
         </div>
       )}
@@ -237,7 +238,7 @@ function YearTable({ rows, title, hint, onRow }) {
               <th className="text-left font-medium px-3 py-2.5">{tt('항목')}</th>
               {YEARS.map((y) => (
                 <th key={y} className={`text-right font-medium px-3 py-2.5 whitespace-nowrap ${y === CURRENT_YEAR ? 'bg-blue-50/50 text-blue-700' : ''}`}>
-                  {y.slice(2)}년<span className="block text-[9px] font-normal text-slate-300">{y === CURRENT_YEAR ? '입력 실적' : '실적'}</span>
+                  {y.slice(2)}{translateDisplay("년")}<span className="block text-[9px] font-normal text-slate-300">{y === CURRENT_YEAR ? '입력 실적' : '실적'}</span>
                 </th>
               ))}
               <th className="text-right font-medium px-3 py-2.5">{tt('전년비')}</th>
@@ -277,9 +278,9 @@ function YearTable({ rows, title, hint, onRow }) {
 function MonthTable({ metric, clff, region, subtype }) {
   const { t: tt, lang } = useLang();
   const unit = planUnitLabel(metric);
-  const moLabel = (i) => (lang === 'en' ? `${i + 1}` : `${i + 1}월`);
+  const moLabel = (i) => (localizeText(`${i + 1}월`, `${i + 1}`, lang));
   return (
-    <Card title="월별 비교" hint={`${tt(metric)} · ${unit}`}>
+    <Card title={translateDisplay("월별 비교")} hint={`${tt(metric)} · ${unit}`}>
       <div className="overflow-x-auto scrollbar-thin">
         <table className="text-sm min-w-full">
           <thead>
@@ -299,8 +300,7 @@ function MonthTable({ metric, clff, region, subtype }) {
               return (
                 <tr key={y} className={`border-b border-slate-50 last:border-0 ${cur ? 'bg-blue-50/40' : ''}`}>
                   <td className={`text-left px-2.5 py-2 font-semibold sticky left-0 whitespace-nowrap ${cur ? 'bg-blue-50/40' : 'bg-white'}`} style={{ color: YEAR_COLOR[y] }}>
-                    {y.slice(2)}년
-                  </td>
+                    {y.slice(2)}{translateDisplay("년 ")}</td>
                   {s.map((v, i) => {
                     const t = disp(v, metric);
                     const neg = typeof t === 'string' && /^-\d/.test(t);
@@ -317,7 +317,7 @@ function MonthTable({ metric, clff, region, subtype }) {
           </tbody>
         </table>
       </div>
-      <div className="text-[10px] text-slate-400 mt-1.5">연한 글씨 = 미입력 · {CURRENT_YEAR}년 {actualCount(CURRENT_YEAR) + 1}월부터 미입력</div>
+      <div className="text-[10px] text-slate-400 mt-1.5">{translateDisplay("연한 글씨 = 미입력 · ")}{CURRENT_YEAR}{translateDisplay("년 ")}{actualCount(CURRENT_YEAR) + 1}{translateDisplay("월부터 미입력")}</div>
     </Card>
   );
 }
@@ -387,16 +387,16 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
     };
   });
 
-  const moLabel = (i) => (lang === 'en' ? `${i + 1}` : `${i + 1}월`);
+  const moLabel = (i) => (localizeText(`${i + 1}월`, `${i + 1}`, lang));
   const viewOptions = [
-    { id: '요약', label: lang === 'en' ? 'Summary' : '요약' },
-    { id: '점검', label: lang === 'en' ? 'Check' : '점검' },
-    { id: '상세', label: lang === 'en' ? 'Detail' : '상세' },
+    { id: '요약', label: localizeText('요약', 'Summary', lang) },
+    { id: '점검', label: localizeText('점검', 'Check', lang) },
+    { id: '상세', label: localizeText('상세', 'Detail', lang) },
   ];
   const basisOptions = [
-    { id: 'mom', label: lang === 'en' ? 'MoM' : '전월비', disabled: m === 1 },
-    { id: 'yoy', disabled: !hasPreviousYear, label: lang === 'en' ? 'YoY month' : '전년동월비' },
-    { id: 'ytd', disabled: !hasPreviousYear, label: lang === 'en' ? 'YTD YoY' : '누계 전년비' },
+    { id: 'mom', label: localizeText('전월비', 'MoM', lang), disabled: m === 1 },
+    { id: 'yoy', disabled: !hasPreviousYear, label: localizeText('전년동월비', 'YoY month', lang) },
+    { id: 'ytd', disabled: !hasPreviousYear, label: localizeText('누계 전년비', 'YTD YoY', lang) },
   ];
 
   return (
@@ -410,18 +410,18 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
       )}
 
       {/* 월 선택 */}
-      {Number(CURRENT_YEAR) <= 2024 && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">이 연도 원본은 지역·세부 사업 구분이 누락되어 있습니다. 지역 ‘전체’로 조회해 주세요. 북부·남부 비교는 2025년부터 가능합니다.</p>}
-      {!hasPreviousYear && <p className="text-xs text-slate-500">전년 자료 또는 동일 지역 구분이 없어 전년 비교를 제공하지 않습니다.</p>}
+      {Number(CURRENT_YEAR) <= 2024 && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">{translateDisplay("이 연도 원본은 지역·세부 사업 구분이 누락되어 있습니다. 지역 ‘전체’로 조회해 주세요. 북부·남부 비교는 2025년부터 가능합니다.")}</p>}
+      {!hasPreviousYear && <p className="text-xs text-slate-500">{translateDisplay("전년 자료 또는 동일 지역 구분이 없어 전년 비교를 제공하지 않습니다.")}</p>}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-xs text-slate-400 mr-1">기준 연도</span>
+        <span className="text-xs text-slate-400 mr-1">{translateDisplay("기준 연도")}</span>
         {YEARS.map((year) => <Chip key={year} active={year === CURRENT_YEAR} onClick={() => {
           setYear(year); setM(actualCount(year)); localStorage.setItem('vn-pnl-year', year);
           if (Number(year) <= 2024) onHistoricalYear();
           if (year === YEARS[0]) setCompareBasis('mom');
-        }}>{year}년</Chip>)}
+        }}>{year}{translateDisplay("년")}</Chip>)}
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-xs text-slate-400 mr-1">{lang === 'en' ? 'Month' : '기준 월'}</span>
+        <span className="text-xs text-slate-400 mr-1">{localizeText('기준 월', 'Month', lang)}</span>
         {meta.map((mo, i) => (
           <button
             key={i}
@@ -439,11 +439,11 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
 
       <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-2.5 space-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-blue-900">{lang === 'en' ? 'Monthly workflow' : '북부 월간 업무 보기'}</span>
-          <span className="text-[10px] text-blue-500">{lang === 'en' ? 'Show only one comparison detail to reduce repetition.' : '중복을 줄이기 위해 선택한 비교 기준만 펼칩니다.'}</span>
+          <span className="text-[11px] font-semibold text-blue-900">{localizeText('북부 월간 업무 보기', 'Monthly workflow', lang)}</span>
+          <span className="text-[10px] text-blue-500">{localizeText('중복을 줄이기 위해 선택한 비교 기준만 펼칩니다.', 'Show only one comparison detail to reduce repetition.', lang)}</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="w-14 text-[10px] font-semibold text-slate-500">{lang === 'en' ? 'View' : '보기'}</span>
+          <span className="w-14 text-[10px] font-semibold text-slate-500">{localizeText('보기', 'View', lang)}</span>
           {viewOptions.map((option) => (
             <button
               key={option.id}
@@ -456,7 +456,7 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="w-14 text-[10px] font-semibold text-slate-500">{lang === 'en' ? 'Compare' : '비교'}</span>
+          <span className="w-14 text-[10px] font-semibold text-slate-500">{localizeText('비교', 'Compare', lang)}</span>
           {basisOptions.map((option) => (
             <button
               key={option.id}
@@ -472,7 +472,7 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
       </div>
 
       {/* 당월 비교 */}
-      <Card title="당월 비교" hint={`${moLabel(m - 1)} · ${t(type)}`}>
+      <Card title={translateDisplay("당월 비교")} hint={`${moLabel(m - 1)} · ${t(type)}`}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead>
@@ -514,7 +514,7 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
 
       {/* 누계 비교 */}
       {(effectiveBasis === 'ytd' || viewMode === '상세') && (
-      <Card title="누계 비교" hint={`1~${moLabel(m - 1)} · ${t('누계')}`}>
+      <Card title={translateDisplay("누계 비교")} hint={`1~${moLabel(m - 1)} · ${t('누계')}`}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead>
@@ -523,8 +523,8 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
                 <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{`${prevYear.slice(2)} ${t('누계')}`}</th>
                 <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap bg-blue-50/50 text-blue-700">{`${CURRENT_YEAR.slice(2)} ${t('누계')}`}</th>
                 <th className="text-right font-medium px-3 py-2.5">{t('전년비')}</th>
-                <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">입력 실적 합계</th>
-                <th className="text-right font-medium px-3 py-2.5">입력 합계 대비</th>
+                <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{translateDisplay("입력 실적 합계")}</th>
+                <th className="text-right font-medium px-3 py-2.5">{translateDisplay("입력 합계 대비")}</th>
               </tr>
             </thead>
             <tbody>
@@ -544,7 +544,7 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
       </Card>
       )}
 
-      <p className="text-[11px] text-slate-400 text-center">{lang === 'en' ? 'Current month vs prev month / same month last year · YTD vs last year & annual progress' : `당월=전월·전년동월 대비, 누계=전년 동일기간 대비·입력 실적 비중 · 단위 매출 ${largeMoneyLabel()}/이익 ${smallMoneyLabel()}`}</p>
+      <p className="text-[11px] text-slate-400 text-center">{localizeText(`당월=전월·전년동월 대비, 누계=전년 동일기간 대비·입력 실적 비중 · 단위 매출 ${largeMoneyLabel()}/이익 ${smallMoneyLabel()}`, 'Current month vs prev month / same month last year · YTD vs last year & annual progress', lang)}</p>
     </>
   );
 }
@@ -592,7 +592,7 @@ function EntityBlock({ e, L, mnD, pp, periodTag }) {
 /* 한 비교기간(cmp)의 상세 — 창고별·고객별 각각 원가 사유 + 판정 */
 function VarianceSection({ tag, color, cmp, clff, region, subtype, viewMode = '상세' }) {
   const { lang } = useLang();
-  const L = (ko, en) => (lang === 'en' ? en : ko);
+  const L = (ko, en) => (localizeText(ko, en, lang));
   const biz = subtypeToBiz(subtype);
   // WM→창고, TM→운송만 운영데이터로 정확히 좁혀짐. 그 외 세부(S/P·해상 등)는
   // ops에 대응 세그먼트가 없어 사업 전체 기준으로 넓어짐 — 아래 배지로 명시.
@@ -619,7 +619,7 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype, viewMode = '�
         </div>
       )}
 
-      <Suspense fallback={<div className="text-[11px] text-slate-400 px-2 py-1">보고 브리핑 불러오는 중…</div>}>
+      <Suspense fallback={<div className="text-[11px] text-slate-400 px-2 py-1">{translateDisplay("보고 브리핑 불러오는 중…")}</div>}>
         <ReportBriefing
           key={[cmp.by, cmp.bm.join('-'), cmp.cy, cmp.cm.join('-'), region, clff, subtype].join(':')}
           tag={tag}
@@ -693,7 +693,7 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype, viewMode = '�
 /* 변동 원인 상세 — 전월비/전년비 섹션으로 창고·고객·원가 사유 전개. mode: 'ytd'|'month' */
 function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', viewMode = '상세', month = actualCount(CURRENT_YEAR), year = CURRENT_YEAR }) {
   const { lang } = useLang();
-  const L = (ko, en) => (lang === 'en' ? en : ko);
+  const L = (ko, en) => (localizeText(ko, en, lang));
   const monthCmp = cmpMoM(month, year);
   const primaryCmp = mode === 'month' ? (monthCmp || cmpYoYMonth(month, year)) : cmpYTD(month, year);
   const overall = marginDiagnosis(primaryCmp, clff, region, subtype);
@@ -737,7 +737,7 @@ function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', view
         />
       ))}
       {viewMode === '상세' && (
-        <div className="text-[10px] text-slate-400">매출·이익·원가 항목은 동일 PNL 원본 기준(VND)입니다. ▼악화/▲개선=매출이익 증감. 🔧=반복 변동. 실제 원인은 담당자 확인 필요.</div>
+        <div className="text-[10px] text-slate-400">{translateDisplay("매출·이익·원가 항목은 동일 PNL 원본 기준(VND)입니다. ▼악화/▲개선=매출이익 증감. 🔧=반복 변동. 실제 원인은 담당자 확인 필요.")}</div>
       )}
     </div>
   );
@@ -753,8 +753,8 @@ function PlanCard() {
     { lab: `${t('누계')} ~${CMP_MONTH}`, c: d.total.ytd, py: d.total.ytd.py },
   ];
   return (
-    <Card title={lang === 'en' ? 'vs Plan (Target)' : '목표 대비 (계획比)'}
-      hint={lang === 'en' ? `Vietnam total · base ${CMP_MONTH}` : `베트남 전체 · ${CMP_MONTH} 기준`}>
+    <Card title={localizeText('목표 대비 (계획比)', 'vs Plan (Target)', lang)}
+      hint={localizeText(`베트남 전체 · ${CMP_MONTH} 기준`, `Vietnam total · base ${CMP_MONTH}`, lang)}>
       <div className="overflow-x-auto scrollbar-thin">
         <table className="w-full text-sm">
           <thead>
@@ -786,7 +786,7 @@ function PlanCard() {
           </tbody>
         </table>
       </div>
-      <div className="text-[10px] text-slate-400 mt-1.5">{lang === 'en' ? 'Attainment = Actual / Plan. Green ≥100% (on/above target), red <100%.' : '달성률 = 실적/계획. 초록 ≥100%(목표 달성), 빨강 <100%(미달). 사업라인별 달성률은 아래 표 참고.'}</div>
+      <div className="text-[10px] text-slate-400 mt-1.5">{localizeText('달성률 = 실적/계획. 초록 ≥100%(목표 달성), 빨강 <100%(미달). 사업라인별 달성률은 아래 표 참고.', 'Attainment = Actual / Plan. Green ≥100% (on/above target), red <100%.', lang)}</div>
     </Card>
   );
 }
@@ -799,13 +799,13 @@ function LineCard({ metric }) {
   const attCol = (p) => (p == null ? 'text-slate-400' : p >= 100 ? 'text-emerald-600' : 'text-red-500');
   const att = (c) => attain(c.act, c.plan);
   return (
-    <Card title={lang === 'en' ? `${t(metric)} by Business Line` : `${t(metric)} 사업라인별 달성률`}
+    <Card title={localizeText(`${t(metric)} 사업라인별 달성률`, `${t(metric)} by Business Line`, lang)}
       hint={`${CMP_MONTH} · ${planUnitLabel(metric)}`}>
       <div className="overflow-x-auto scrollbar-thin">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-slate-400 text-xs border-b border-slate-100">
-              <th className="text-left font-medium px-3 py-2">{lang === 'en' ? 'Line' : '사업라인'}</th>
+              <th className="text-left font-medium px-3 py-2">{localizeText('사업라인', 'Line', lang)}</th>
               <th className="text-right font-medium px-3 py-2 whitespace-nowrap">{t('당월')} {t('실적')}</th>
               <th className="text-right font-medium px-3 py-2 whitespace-nowrap">{t('당월')} {t('달성률')}</th>
               <th className="text-right font-medium px-3 py-2 whitespace-nowrap">{t('누계')} {t('실적')}</th>
@@ -825,7 +825,7 @@ function LineCard({ metric }) {
           </tbody>
         </table>
       </div>
-      <div className="text-[10px] text-slate-400 mt-1.5">{lang === 'en' ? '※ Management groupings — may overlap; sum ≠ total.' : '※ 사업라인은 관리 기준 그룹(중복 가능) — 합계는 총계와 다를 수 있음. 라인별 달성률만 참고.'}</div>
+      <div className="text-[10px] text-slate-400 mt-1.5">{localizeText('※ 사업라인은 관리 기준 그룹(중복 가능) — 합계는 총계와 다를 수 있음. 라인별 달성률만 참고.', '※ Management groupings — may overlap; sum ≠ total.', lang)}</div>
     </Card>
   );
 }
@@ -861,7 +861,7 @@ function SummaryView({ clff, region, subtype }) {
 
   return (
     <>
-      <YearTable rows={rows} metric="매출" title="손익 비교 (연도별)" hint="손익항목 × 연도" />
+      <YearTable rows={rows} metric="매출" title={translateDisplay("손익 비교 (연도별)")} hint="손익항목 × 연도" />
       <MonthTable metric="매출" clff={clff} region={region} subtype={subtype} />
     </>
   );
@@ -897,15 +897,15 @@ function MetricView({ metric, clff, region, subtype, onRow }) {
     <>
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <Kpi label={`${cur}년 연간`} value={disp(annual(cur, metric, clff, region, subtype), metric)} unit={unit} accent="blue" />
-        <Kpi label={`YTD (~${actualCount(cur)}월)`} value={disp(ytd(cur, metric, clff, region, subtype), metric)} unit={unit} accent="slate" />
+        <Kpi label={translateDisplay(`${cur}년 연간`)} value={disp(annual(cur, metric, clff, region, subtype), metric)} unit={unit} accent="blue" />
+        <Kpi label={translateDisplay(`YTD (~${actualCount(cur)}월)`)} value={disp(ytd(cur, metric, clff, region, subtype), metric)} unit={unit} accent="slate" />
         <Kpi label="전년비" valueNode={deltaTag(yoy(cur, metric, clff, region, subtype))} accent="slate" />
-        <Kpi label={isProfit ? (RATIO_LABEL[metric] || '이익률') : `${YEARS[0].slice(2)}→${cur.slice(2)} 성장`}
+        <Kpi label={isProfit ? (RATIO_LABEL[metric] || '이익률') : translateDisplay(`${YEARS[0].slice(2)}→${cur.slice(2)} 성장`)}
           valueNode={isProfit ? <span className="text-emerald-600">{fmtPct(marginPct(cur, metric, clff, region, subtype))}</span> : deltaTag(totalGrowth(metric, clff, region, subtype))}
           accent={isProfit ? 'green' : 'slate'} />
       </div>
 
-      <YearTable rows={rows} metric={metric} title="연도별 비교"
+      <YearTable rows={rows} metric={metric} title={translateDisplay("연도별 비교")}
         hint={clff === '전체' ? '사업(CL/FF)별' : subtype !== '전체' ? '지역별' : '세부별'}
         onRow={onRow} />
       <MonthTable metric={metric} clff={clff} region={region} subtype={subtype} />
