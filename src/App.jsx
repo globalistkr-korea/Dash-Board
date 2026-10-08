@@ -16,7 +16,7 @@ function PageLoading() {
 }
 
 function AppContent() {
-  const [page, setPage] = useState('plan');
+  const [page, setPage] = useState(() => { const value=new URLSearchParams(window.location.search).get('page'); return ['plan','warehouse','customer','contract','decision'].includes(value)?value:'plan'; });
   const render = () => {
     switch (page) {
       case 'decision': return <DecisionPage />;
@@ -28,7 +28,7 @@ function AppContent() {
     }
   };
   return (
-    <Layout currentPage={page} onNavigate={setPage}>
+    <Layout currentPage={page} onNavigate={value=>{setPage(value);const url=new URL(window.location.href);url.searchParams.set('page',value);window.history.replaceState(null,'',url);}}>
       <Suspense fallback={<PageLoading />}>
         {render()}
       </Suspense>
