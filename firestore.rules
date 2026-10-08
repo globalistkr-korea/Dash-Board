@@ -23,6 +23,14 @@ service cloud.firestore {
         && request.auth.token.email in allowedReportEmails();
     }
 
+    match /decisionBoards/{userId}/items/{issueId} {
+      allow read, write: if isAllowedReportUser(userId);
+      match /history/{revisionId} {
+        allow read, create: if isAllowedReportUser(userId);
+        allow update, delete: if false;
+      }
+    }
+
     match /reportBriefingNotes/{userId}/items/{noteId} {
       allow read, write: if isAllowedReportUser(userId);
     }

@@ -1,9 +1,10 @@
 import { localizeText, translateDisplay } from "../lib/i18n";
-import { BarChart2, Users, Warehouse, FileText, TrendingUp, RefreshCw } from 'lucide-react';
+import { BarChart2, Users, Warehouse, FileText, TrendingUp, RefreshCw, ClipboardCheck } from 'lucide-react';
 import { useLang } from '../context/LangContext';
 import { useVersionCheck, applyUpdate } from '../lib/useVersionCheck';
 
 const NAV_ITEMS = [
+  { id: 'decision', label: '의사결정', icon: ClipboardCheck },
   { id: 'plan',      label: '경영실적',  icon: TrendingUp },
   { id: 'warehouse', label: '창고별',    icon: Warehouse  },
   { id: 'customer',  label: '고객사별',  icon: Users      },
@@ -95,7 +96,7 @@ export default function Layout({ currentPage, onNavigate, children }) {
         className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-5">
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}

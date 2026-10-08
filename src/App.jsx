@@ -4,6 +4,7 @@ import { LangProvider } from './context/LangContext';
 import Layout from './components/Layout';
 import PlanPage from './pages/PlanPage';
 
+const DecisionPage = lazy(() => import('./pages/DecisionPage'));
 const WarehousePage = lazy(() => import('./pages/WarehousePage'));
 const CustomerPage = lazy(() => import('./pages/CustomerPage'));
 const ContractPage = lazy(() => import('./pages/ContractPage'));
@@ -18,6 +19,7 @@ function AppContent() {
   const [page, setPage] = useState('plan');
   const render = () => {
     switch (page) {
+      case 'decision': return <DecisionPage />;
       case 'warehouse': return <WarehousePage />;
       case 'customer':  return <CustomerPage />;
       case 'contract':  return <ContractPage />;

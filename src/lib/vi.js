@@ -1,5 +1,7 @@
 // Reviewed UI/report translations. Interpolated figures and entity names are preserved.
 export const VI = {
+  '의사결정': 'Quyết định',
+  'Decisions': 'Quyết định',
   'Unassigned':'Chưa phân loại',
   'Summary':'Tóm tắt','Revenue':'Doanh thu','Cost of Sales':'Giá vốn','Gross Profit':'Lợi nhuận gộp','Gross profit':'Lợi nhuận gộp','Direct Profit':'Lợi nhuận trực tiếp','Direct Cost':'Chi phí trực tiếp','Indirect Cost':'Chi phí gián tiếp','SG&A':'Chi phí bán hàng và quản lý','Operating Profit':'Lợi nhuận hoạt động','OP Margin':'Biên lợi nhuận hoạt động','GP Margin':'Biên lợi nhuận gộp','COGS %':'Tỷ lệ giá vốn','SG&A %':'Tỷ lệ chi phí BH&QL',
   'Business':'Mảng kinh doanh','Region':'Khu vực','Type':'Loại','Detail':'Chi tiết','All':'Tất cả','Transport':'Vận tải','Warehouse':'Kho','Customer':'Khách hàng','Vendor':'Nhà cung cấp','South':'Miền Nam','North':'Miền Bắc','Others':'Khác','Sea':'Đường biển','Air':'Hàng không','Customs':'Hải quan','Haulage':'Vận tải nội địa',

@@ -1,5 +1,6 @@
 // 한글 라벨 ↔ 영어 병기 (베트남 스태프 내부 미팅용)
 export const EN = {
+  '의사결정': 'Decisions',
   '경영실적': 'P&L Actual',
   '직접이익': 'Direct Profit',
   '간접원가': 'Indirect Cost',
