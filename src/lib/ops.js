@@ -126,3 +126,13 @@ export function itemRanking(v, year = OPS_CURRENT) {
     .filter((x) => (x.series?.[year] || []).some((val) => val !== 0))
     .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
 }
+
+// month=0: 기존 누적, 1~12: 선택 월. 미입력 월은 UI에서 선택하지 않는다.
+export const periodOf = (v, field, year, month = 0) => month ? (v?.[field]?.[year]?.[month - 1] || 0) : annualOf(v, field, year);
+export function periodYoyOf(v, field, year, month = 0) {
+  if (!month) return yoyOf(v, field, year);
+  const previousYear = OPS_YEARS[OPS_YEARS.indexOf(year) - 1];
+  if (!previousYear || month > opsActualCount(previousYear)) return null;
+  const previous = periodOf(v, field, previousYear, month);
+  return previous ? (periodOf(v, field, year, month) - previous) / Math.abs(previous) * 100 : null;
+}
