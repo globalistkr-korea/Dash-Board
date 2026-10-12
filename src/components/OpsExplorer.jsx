@@ -110,7 +110,7 @@ export default function OpsExplorer({ kind, groupNoun }) {
 
       {!selEntity
         ? <ListTable month={month} year={year} rows={rows} anomalyCount={anomalyCount} groupNoun={groupNoun} onPick={setSel} />
-        : <Detail month={month} year={year} setYear={changeYear} e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} />}
+        : <Detail month={month} year={year} setYear={y => { setYear(y); setMonth(0); }} e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} />}
 
       <p className="text-[11px] text-slate-400 text-center">{translateDisplay("출처: ")}{OPS_SOURCE?.title}{translateDisplay(" · 2023·2024년 지역·세부 사업 미지정 · 참고용, 원본과 교차확인 권장")}</p>
     </div>
@@ -287,6 +287,7 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
         </div>
       )}
 
+      <p className="text-xs text-slate-500">{translateDisplay(`월평균 = ${month ? '선택 월' : '누계'} ÷ ${month ? 1 : n}개월 · 미집계 월 제외`)}</p>
       <Card title={translateDisplay("월별 손익")} hint={translateDisplay(`${year}년${month ? ` ${month}월` : ''}${clff === 'CL' && bizD !== '전체' ? ' · ' + bizD : ''}`)}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="text-sm min-w-full">
@@ -294,7 +295,8 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
               <tr className="text-slate-400 text-xs border-b border-slate-100">
                 <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white">{translateDisplay("항목")}</th>
                 {months.map((i) => <th key={i} className={`text-right font-medium px-2 py-2 ${i >= n ? 'text-slate-200' : ''}`}>{i + 1}{translateDisplay("월")}</th>)}
-                <th className="text-right font-medium px-2.5 py-2 bg-slate-50">{translateDisplay(month ? '선택 월' : '합계')}</th>
+                <th className="text-right font-medium px-2.5 py-2 bg-slate-50">{translateDisplay(month ? '선택 월' : '누계')}</th>
+                <th className="text-right font-medium px-2.5 py-2 bg-blue-50 whitespace-nowrap">{translateDisplay('월평균')}</th>
               </tr>
             </thead>
             <tbody>
@@ -310,6 +312,7 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
                       return <td key={i} className={`text-right px-2 py-2 tabular-nums whitespace-nowrap ${i >= n ? 'text-slate-200' : x < 0 ? 'text-red-500' : 'text-slate-700'}`}>{row.f(x)}</td>;
                     })}
                     <td className="text-right px-2.5 py-2 tabular-nums font-bold text-slate-800 bg-slate-50">{row.f(periodOf(v, row.k, year, month))}</td>
+                    <td className="text-right px-2.5 py-2 tabular-nums font-semibold text-blue-800 bg-blue-50">{row.f(periodOf(v, row.k, year, month) / (month ? 1 : n))}</td>
                   </tr>
                 );
               })}
@@ -325,7 +328,8 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
               <tr className="text-slate-400 text-xs border-b border-slate-100">
                 <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white whitespace-nowrap">{translateDisplay("원가 항목")}<span className="block text-[9px] text-slate-300">{smallMoneyLabel()}</span></th>
                 {months.map((i) => <th key={i} className={`text-right font-medium px-2 py-2 ${i >= n ? 'text-slate-200' : ''}`}>{i + 1}{translateDisplay("월")}</th>)}
-                <th className="text-right font-medium px-2.5 py-2 bg-slate-50">{month ? translateDisplay('선택 월') : 'YTD'}</th>
+                <th className="text-right font-medium px-2.5 py-2 bg-slate-50">{translateDisplay(month ? '선택 월' : '누계')}</th>
+                <th className="text-right font-medium px-2.5 py-2 bg-blue-50 whitespace-nowrap">{translateDisplay('월평균')}</th>
               </tr>
             </thead>
             <tbody>
@@ -347,10 +351,11 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
                       );
                     })}
                     <td className="text-right px-2.5 py-2 tabular-nums font-semibold text-slate-700 bg-slate-50">{mn(periodOf({ [item]: v.items?.[item] }, item, year, month))}</td>
+                    <td className="text-right px-2.5 py-2 tabular-nums font-semibold text-blue-800 bg-blue-50">{mn(periodOf({ [item]: v.items?.[item] }, item, year, month) / (month ? 1 : n))}</td>
                   </tr>
                 );
               })}
-              {ranked.length === 0 && <tr><td className="px-3 py-4 text-center text-slate-400 text-sm" colSpan={months.length + 2}>{translateDisplay("원가 데이터가 없습니다.")}</td></tr>}
+              {ranked.length === 0 && <tr><td className="px-3 py-4 text-center text-slate-400 text-sm" colSpan={months.length + 3}>{translateDisplay("원가 데이터가 없습니다.")}</td></tr>}
             </tbody>
           </table>
         </div>
