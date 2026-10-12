@@ -5,6 +5,14 @@ import { auth, db, googleProvider } from '../lib/firebase';
 import { loadAllowedReportEmails, isAllowedReportUser } from '../lib/reportNotesStore';
 import { useLang } from '../context/LangContext';
 import { todayVN, urgency, STEPS, decisionReport, copyText } from '../lib/decisions';
+const loginError = e => {
+ const code=e?.code||'auth/unknown';
+ if(code==='auth/configuration-not-found'||code==='auth/operation-not-allowed')return 'Google 로그인 설정 확인이 필요합니다 ('+code+')';
+ if(code==='auth/unauthorized-domain')return '이 접속 주소는 로그인 허용 주소가 아닙니다. vn-buk-dashboard.web.app에서 열어주세요.';
+ if(code==='auth/network-request-failed')return '네트워크 연결을 확인하고 다시 로그인해주세요.';
+ if(code==='auth/web-storage-unsupported')return '브라우저의 쿠키·저장소를 허용하고 다시 로그인해주세요.';
+ return '로그인을 완료하지 못했습니다. 다시 시도해주세요 ('+code+')';
+};
 const fresh = () => ({id:crypto.randomUUID(),title:'',entity:'',owner:'',dueDate:'',status:'review',situation:'',impact:'',alternatives:'',tradeoffs:'',opinion:'',request:'',sources:'',actions:[],revision:0});
 const statusNames = {review:['결정 필요','Decision needed','Cần quyết định'],active:['진행 중','In progress','Đang xử lý'],done:['완료','Done','Hoàn thành'],archived:['보관','Archived','Lưu trữ']};
 const button='rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50';
@@ -13,7 +21,7 @@ export default function DecisionPage() {
  const {lang}=useLang(); const ix=lang==='vi'?2:lang==='en'?1:0;
  const L=(ko,en,vi)=>[ko,en,vi][ix];
  const [user,setUser]=useState(undefined),[allowed,setAllowed]=useState(null),[items,setItems]=useState([]),[ready,setReady]=useState(false),[draft,setDraft]=useState(null),[filter,setFilter]=useState('open'),[search,setSearch]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[report,setReport]=useState(null);
- useEffect(()=>{const stop=onAuthStateChanged(auth,u=>{setUser(u);setItems([]);setDraft(null);setReady(false);});getRedirectResult(auth).catch(()=>setMessage('로그인 확인 실패'));return stop;},[]);
+ useEffect(()=>{const stop=onAuthStateChanged(auth,u=>{setUser(u);setItems([]);setDraft(null);setReady(false);});getRedirectResult(auth).catch(e=>setMessage(loginError(e)));return stop;},[]);
  useEffect(()=>{if(!user)return;let active=true;loadAllowedReportEmails().then(v=>{if(active)setAllowed(v);});return()=>{active=false;};},[user]);
  const permitted=isAllowedReportUser(user,allowed||[]);
  useEffect(()=>{if(!permitted)return;return onSnapshot(collection(db,'decisionBoards',user.uid,'items'),{includeMetadataChanges:true},snap=>{setItems(snap.docs.map(d=>({...d.data(),id:d.id})));setReady(true);setMessage(snap.metadata.fromCache?'기기 캐시 · 서버 연결 확인 중':'클라우드 동기화 완료');},()=>{setReady(false);setMessage('클라우드 연결 실패 · 다시 연결 후 저장해주세요');});},[permitted,user]);
@@ -25,7 +33,7 @@ export default function DecisionPage() {
  const tasks=items.filter(i=>!['done','archived'].includes(i.status)).flatMap(item=>(item.actions||[]).filter(a=>!a.done&&a.task.trim()).map(action=>({item,action}))).sort((a,b)=>(a.action.dueDate||'9999').localeCompare(b.action.dueDate||'9999'));
  const patch=(key,value)=>setDraft(d=>({...d,[key]:value}));
  if(user===undefined)return <p>{L('로그인 확인 중…','Checking sign-in…','Đang kiểm tra đăng nhập…')}</p>;
- if(!user)return <section className="rounded-xl bg-white p-6"><h1 className="text-xl font-bold">{L('의사결정·후속조치','Decisions & actions','Quyết định & hành động')}</h1><p className="my-4 text-sm text-slate-500">{L('Google 로그인 후 개인 보드가 기기 간 동기화됩니다.','Sign in to sync your private board.','Đăng nhập để đồng bộ bảng cá nhân.')}</p><button className={button} onClick={()=>signInWithRedirect(auth,googleProvider).catch(()=>setMessage('로그인 실패'))}>{L('Google로 시작','Continue with Google','Đăng nhập Google')}</button><p role="status">{message}</p></section>;
+ if(!user)return <section className="rounded-xl bg-white p-6"><h1 className="text-xl font-bold">{L('의사결정·후속조치','Decisions & actions','Quyết định & hành động')}</h1><p className="my-4 text-sm text-slate-500">{L('Google 로그인 후 개인 보드가 기기 간 동기화됩니다.','Sign in to sync your private board.','Đăng nhập để đồng bộ bảng cá nhân.')}</p><button className={button} disabled={busy} onClick={async()=>{setBusy(true);setMessage('Google 로그인으로 이동 중…');try{await signInWithRedirect(auth,googleProvider);}catch(e){setMessage(loginError(e));setBusy(false);}}}>{L('Google로 시작','Continue with Google','Đăng nhập Google')}</button><p role="status">{message}</p></section>;
  if(!allowed)return <p>{L('권한 확인 중…','Checking access…','Đang kiểm tra quyền…')}</p>;
  if(!permitted)return <p>{L('이 계정은 업무 보드 접근 권한이 없습니다.','This account has no board access.','Tài khoản không có quyền truy cập.')}</p>;
  return <div className="space-y-4">

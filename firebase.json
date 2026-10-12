@@ -45,5 +45,16 @@
         ]
       }
     ]
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "VN North Dashboard",
+        "supportEmail": "globalistkr@gmail.com",
+        "authorizedRedirectUris": [
+          "https://vn-buk-dashboard.web.app/__/auth/handler"
+        ]
+      }
+    }
   }
 }

@@ -79,9 +79,9 @@ def sync(workbook=None, root=ROOT):
                 os.replace(staged, destination)
         checked = datetime.now(timezone.utc).isoformat()
         revision = hashlib.sha256(canonical(new['ops.json']).encode()).hexdigest()
-        status = {'status': 'ok', 'automationEnabled': os.environ.get('GITHUB_ACTIONS') == 'true', 'lastCheckedAt': checked,
+        status = {'status': 'ok', 'automationEnabled': False, 'lastCheckedAt': checked,
                   'lastUpdatedAt': new['ops.json']['source']['importedAt'], 'revision': revision,
-                  'sourceId': SOURCE_ID, 'intervalHours': 3,
+                  'sourceId': SOURCE_ID, 'collectionMode': 'manual', 'intervalHours': None,
                   'years': new['ops.json']['years'], 'months': new['ops.json']['source']['months']}
         (root / 'public').mkdir(exist_ok=True)
         (root / 'public/pnl-sync.json').write_text(json.dumps(status, ensure_ascii=False, separators=(',', ':')))
