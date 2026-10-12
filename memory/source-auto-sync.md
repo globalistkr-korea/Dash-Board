@@ -15,3 +15,4 @@
 - 활성화 상태: 2026-10-12 GitHub 로그인 후 워크플로 main 등록 완료. 최초 실행 38213477972 수집·테스트·빌드·WIF 인증·Hosting 배포·원본 커밋 모두 성공. production automationEnabled=true 확인.
 
 - Google 로그인 실패 원인: Firebase Auth 설정 자체가 없었음(CONFIGURATION_NOT_FOUND). firebase.json의 Google provider 설정을 CLI auth 배포로 활성화. 같은 Hosting 도메인 redirect 방식 유지(PWA popup 사용 안 함).
+- 로그인 검증 범위: Auth config/provider 200, Google enabled=true, Hosting authorized domain 확인, createAuthUri 200(accounts.google.com). 내장 브라우저 redirect는 network 오류/handler bad-request가 남아 실제 사용자 로그인 완료는 미확인.
