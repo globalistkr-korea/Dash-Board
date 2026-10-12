@@ -4,6 +4,7 @@ Usage: python3 scripts/import_customer_pnl.py workbook.xlsx
 Amounts remain million VND; source rows are never filtered by customer size.
 """
 import json
+import math
 import re
 import sys
 from collections import Counter, defaultdict
@@ -24,19 +25,29 @@ def amount(value):
     if value is None or str(value).strip() in ('', '-', '–'):
         return 0.0
     if isinstance(value, (int, float)):
-        return float(value)
+        result = float(value)
+        if not math.isfinite(result):
+            raise ValueError("Non-finite source amount")
+        return result
     text = str(value).strip().replace(',', '')
     if re.fullmatch(r'-?\d{1,3}(?:\.\d{3})+', text):
         text = text.replace('.', '')
     if text.startswith('(') and text.endswith(')'):
         text = '-' + text[1:-1]
-    return float(text)
+    result = float(text)
+    if not math.isfinite(result):
+        raise ValueError("Non-finite source amount")
+    return result
 
 
-def main():
-    wb = openpyxl.load_workbook(sys.argv[1], read_only=True, data_only=True)
+def import_workbook(workbook, output_dir=None):
+    output_dir = Path(output_dir) if output_dir else ROOT / 'src/data'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    wb = openpyxl.load_workbook(workbook, read_only=True, data_only=True)
     years = sorted(re.search(r'(\d{4})$', name).group(1) for name in wb.sheetnames
                    if name.startswith('Customer PNL Raw '))
+    if not years or len(years) != len(set(years)):
+        raise ValueError('Missing or duplicate Customer PNL Raw year sheets')
     blank = lambda: {y: [0.0] * 12 for y in years}
     def entity():
         return {'regions': Counter(), 'data': {}}
@@ -152,6 +163,8 @@ def main():
                               'clff': sorted({'CL' if s in ('창고', '운송', 'CL 기타') else 'FF' if s == 'FF' else '기타' for s in segs}),
                               'data': data}
         return out
+    if any(not month_sets[y] for y in years):
+        raise ValueError('One or more years contain no confirmed amounts')
     source = {'spreadsheetId': SOURCE_ID, 'url': f'https://docs.google.com/spreadsheets/d/{SOURCE_ID}/edit',
               'title': 'Integrated Customer PNL_Y26.Aug_2026.09.20',
               'importedAt': datetime.now(timezone.utc).isoformat(), 'unit': '백만동',
@@ -180,11 +193,12 @@ def main():
                'identityMismatchRows': dict(identity_errors), 'totalsMillionVnd': totals,
                'reconciliation': 'All years/months/metrics reconcile to warehouse and customer totals'}
     for name, data in [('ops.json', ops), ('plan3y.json', plan), ('pnl_import_quality.json', quality)]:
-        (ROOT / 'src/data' / name).write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-    print(json.dumps({'rows': dict(counts), 'months': source['months'], 'warehouses': len(ops['warehouses']),
+        (output_dir / name).write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    wb.close()
+    return {'rows': dict(counts), 'months': source['months'], 'warehouses': len(ops['warehouses']),
                       'customers': len(ops['customers']), 'unknownRegions': dict(unknown_regions),
-                      'unknownBusinesses': dict(unknown_biz), 'identityMismatches': dict(identity_errors)}, ensure_ascii=False, indent=2))
+                      'unknownBusinesses': dict(unknown_biz), 'identityMismatches': dict(identity_errors)}
 
 
 if __name__ == '__main__':
-    main()
+    print(json.dumps(import_workbook(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None), ensure_ascii=False, indent=2))

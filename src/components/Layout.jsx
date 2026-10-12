@@ -1,6 +1,7 @@
 import { localizeText, translateDisplay } from "../lib/i18n";
 import { BarChart2, Users, Warehouse, FileText, TrendingUp, RefreshCw, ClipboardCheck } from 'lucide-react';
 import { useLang } from '../context/LangContext';
+import SourceSyncStatus from './SourceSyncStatus';
 import { useVersionCheck, applyUpdate } from '../lib/useVersionCheck';
 
 const NAV_ITEMS = [
@@ -88,6 +89,7 @@ export default function Layout({ currentPage, onNavigate, children }) {
 
       {/* 메인 */}
       <main className="flex-1 max-w-screen-xl mx-auto w-full px-3 sm:px-4 py-4 pb-24 md:pb-6">
+        <SourceSyncStatus />
         {children}
       </main>
 

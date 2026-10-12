@@ -6,3 +6,7 @@ dist
 .claude/settings.local.json
 source-archives/
 firebase-debug.log
+
+__pycache__/
+*.json.tmp
+gha-creds-*.json

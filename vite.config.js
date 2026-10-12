@@ -1,8 +1,9 @@
+import process from 'node:process';
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // 빌드마다 고유 ID — 앱에 주입되고 dist/version.json에도 기록됨.
-const BUILD_ID = String(Date.now())
+const BUILD_ID = process.env.VITE_BUILD_ID || String(Date.now())
 
 // 배포 후 "새 버전 알림 + [업데이트]"용 version.json 생성 플러그인
 function emitVersionJson() {
