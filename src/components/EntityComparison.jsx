@@ -1,0 +1,26 @@
+import { opsGet, view, opsActualCount } from '../lib/ops';
+import { comparisonMonths, entityComparison } from '../lib/entityComparison';
+import { formatLargeMoney, formatSmallMoney, largeMoneyLabel, smallMoneyLabel } from '../lib/currency';
+import { useLang } from '../context/LangContext';
+import { useState } from 'react';
+
+export default function EntityComparison({ kind, selected, onRemove, onClear, year, month, clff, biz, onPick }) {
+  const { lang } = useLang();
+  const L=(ko,en,vi)=>lang==='en'?en:lang==='vi'?vi:ko;
+  const [basis, setBasis] = useState('yoy');
+  if (!selected.length) return null;
+  const effectiveBasis = month > 1 ? basis : 'yoy';
+  const period = comparisonMonths(year, month, opsActualCount(year), effectiveBasis);
+  const rows = selected.map(name => {const e=opsGet(kind,name); return e ? {name:e.name,...entityComparison(view(e,clff,biz), year, period.current, period)} : null;}).filter(Boolean);
+  const deltaTotal = rows.reduce((sum,r)=>sum+Math.abs(r.profitDelta||0),0);
+  const money=(value,large=false)=>value==null?'—':large?formatLargeMoney(value):formatSmallMoney(value);
+  const signed=(v,large=false)=>v==null?'—':`${v>0?'+':''}${money(v,large)}`;
+  return <section aria-label={L('선택 비교','Selected comparison','So sánh đã chọn')} className="rounded-xl border border-blue-200 bg-white p-3 space-y-3">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-blue-800">{L('선택 비교','Selected comparison','So sánh đã chọn')} · {rows.length}/5</h2><button onClick={onClear} className="text-xs text-slate-500">{L('비교 초기화','Clear comparison','Xóa so sánh')}</button></div>
+    <div className="flex flex-wrap gap-2">{selected.map(name=><button key={name} aria-label={`${name} 비교 해제`} onClick={()=>onRemove(name)} className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">{name} ×</button>)}</div>
+    {rows.length<2&&<p className="text-sm text-slate-500">{L('목록의 체크박스로 비교할 대상을 하나 더 선택하세요.','Select one more entity using the list checkboxes.','Chọn thêm đối tượng trong danh sách.')}</p>}
+    <div className="flex flex-wrap items-center gap-2 text-xs"><span className="text-slate-500">{year} · {month?`${month}월`:`1~${opsActualCount(year)}월`}</span>{['yoy',...(month>1?['mom']:[])].map(value=><button key={value} aria-pressed={effectiveBasis===value} onClick={()=>setBasis(value)} className={'rounded-full border px-3 py-1 '+(effectiveBasis===value?'bg-slate-800 text-white':'text-slate-500')}>{value==='yoy'?L('전년 동일기간','Same period last year','Cùng kỳ năm trước'):L('전월','Previous month','Tháng trước')}</button>)}</div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-sm whitespace-nowrap"><thead className="border-b text-xs text-slate-500"><tr>{[L('대상','Entity','Đối tượng'),`${L('매출','Revenue','Doanh thu')} · ${largeMoneyLabel()}`,`${L('매출이익','Gross profit','Lợi nhuận gộp')} · ${smallMoneyLabel()}`,`${L('영업이익','Operating profit','LN hoạt động')} · ${smallMoneyLabel()}`,L('영업이익률','OP margin','Biên LN hoạt động'),`${L('월평균 매출','Avg monthly revenue','DT TB tháng')} · ${largeMoneyLabel()}`,L('매출 전기 → 당기','Revenue prior → current','DT trước → hiện tại'),L('매출 증감','Revenue change','Biến động DT'),L('증감률','Change %','Biến động %'),L('이익 증감 기여','Profit change share','Đóng góp biến động LN'),L('입력·판정','Coverage / verdict','Dữ liệu / đánh giá')].map(label=><th key={label} className="p-2 text-right first:text-left font-medium">{label}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.name} className="border-b last:border-0"><td className="p-2"><button onClick={()=>onPick(r.name)} className="font-medium text-blue-700">{r.name}</button></td><td className="p-2 text-right">{money(r.revenue,true)}</td><td className="p-2 text-right">{money(r.grossProfit)}</td><td className={'p-2 text-right '+(r.opProfit<0?'text-red-600':'')}>{money(r.opProfit)}</td><td className="p-2 text-right">{r.margin==null?'—':`${r.margin.toFixed(1)}%`}</td><td className="p-2 text-right">{money(r.monthlyAverage,true)}</td><td className="p-2 text-right">{money(r.previousRevenue,true)} → {money(r.revenue,true)}</td><td className="p-2 text-right">{signed(r.delta,true)}</td><td className="p-2 text-right">{r.pct==null?'—':`${r.pct>0?'+':''}${r.pct.toFixed(1)}%`}</td><td className="p-2 text-right">{r.profitDelta==null?'—':`${signed(r.profitDelta)} · ${deltaTotal?(Math.abs(r.profitDelta)/deltaTotal*100).toFixed(0):0}%`}</td><td className="p-2 text-right"><span className={!r.completeCurrent?'text-amber-700':r.opProfit<0?'text-red-600':'text-emerald-700'}>{r.recordedCount}/{r.periodCount} · {!r.completeCurrent?L('입력 확인','Check coverage','Kiểm tra dữ liệu'):r.opProfit<0?L('적자','Loss','Lỗ'):L('흑자','Profit','Có lãi')}</span></td></tr>)}</tbody></table></div>
+    <p className="text-[11px] text-slate-500">{L('월평균은 매출 입력 월 기준(입력 0 포함). 전기 입력이 불완전하면 증감을 표시하지 않습니다. 기여도는 선택 대상의 영업이익 증감 절댓값 합계 기준입니다.','Average uses months with recorded revenue, including recorded zero. Changes require complete prior/current data; contribution uses absolute OP changes among selected entities.','TB theo tháng có DT ghi nhận, gồm 0. Chỉ so sánh khi dữ liệu đủ; đóng góp theo tổng trị tuyệt đối biến động LN của các đối tượng đã chọn.')}</p>
+  </section>;
+}

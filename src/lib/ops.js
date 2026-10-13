@@ -2,6 +2,8 @@
 // 원본 단위: mil VND(백만동). 표시: 매출·직접원가=bil VND(÷1000), 이익·원가항목=mil VND
 // 세그먼트: 창고/운송/FF/기타 (CL = 창고+운송). entity.data[seg]{revenue/.../items}.
 import raw from '../data/ops.json';
+import { canonicalWarehouses, inputState, identityCandidates } from './entityIdentity';
+const entities = { warehouses: canonicalWarehouses(raw.warehouses), customers: raw.customers };
 
 export const OPS_YEARS = raw.years;                 // ['2025','2026']
 export const OPS_CURRENT = OPS_YEARS[OPS_YEARS.length - 1];
@@ -22,7 +24,7 @@ function detectActualMonths(year) {
   }
   return last || 12;
 }
-const ACTUAL = Object.fromEntries(OPS_YEARS.map((y) => [y, detectActualMonths(y)]));
+const ACTUAL = Object.fromEntries(OPS_YEARS.map((y) => [y, raw.actualMonths?.[y] || detectActualMonths(y)]));
 export const opsActualCount = (y) => ACTUAL[y] ?? 12;
 export const EOKDONG = 100;                          // 이상탐지 기준 변동액 = 100 mil VND
 const FIELDS = ['revenue', 'directCost', 'directProfit', 'indirectCost', 'grossProfit', 'opProfit'];
@@ -50,10 +52,18 @@ export function view(e, clff = '전체', biz = '전체') {
   const acc = {};
   for (const f of FIELDS) acc[f] = blankY();
   acc.items = {};
+  acc.coverage = Object.fromEntries(OPS_YEARS.map(y => [y, Array(12).fill(false)]));
+  acc.fieldCoverage = {};
+  acc.itemCoverage = {};
   for (const k of keys) {
     const d = e.data?.[k];
     if (!d) continue;
     for (const f of FIELDS) for (const y of OPS_YEARS) addInto(acc[f][y], d[f]?.[y]);
+    for (const y of OPS_YEARS) for (let i = 0; i < 12; i++) acc.coverage[y][i] ||= Boolean(d.coverage?.[y]?.[i]);
+    for (const field of ['fieldCoverage', 'itemCoverage']) for (const [name, byYear] of Object.entries(d[field] || {})) {
+      acc[field][name] ||= Object.fromEntries(OPS_YEARS.map(y => [y, Array(12).fill(false)]));
+      for (const y of OPS_YEARS) for (let i = 0; i < 12; i++) acc[field][name][y][i] ||= Boolean(byYear[y]?.[i]);
+    }
     for (const [it, mp] of Object.entries(d.items || {})) {
       if (!acc.items[it]) acc.items[it] = blankY();
       for (const y of OPS_YEARS) addInto(acc.items[it][y], mp?.[y]);
@@ -64,15 +74,27 @@ export function view(e, clff = '전체', biz = '전체') {
 
 // 엔티티 목록(region/clff 멤버십 필터) — 정렬은 호출부에서 뷰로
 export function opsList(kind, region = '전체', clff = '전체') {
-  return Object.entries(raw[kind] || {})
+  return Object.entries(entities[kind] || {})
     .map(([name, e]) => ({ name, ...e }))
     .filter((e) => region === '전체' || e.region === region)
     .filter((e) => clff === '전체' || (e.clff || []).includes(clff));
 }
 export const opsGet = (kind, name) => {
-  const e = raw[kind]?.[name];
-  return e ? { name, ...e } : null;
+  const entry = Object.entries(entities[kind] || {}).find(([key, e]) => key === name || e.aliasNames?.includes(name));
+  return entry ? { name: entry[0], ...entry[1] } : null;
 };
+export function nameChangeCandidates(kind, region, clff, biz, year, previousMonths, currentMonths) {
+  if (kind !== 'warehouses') return []; // customer identities cannot be inferred from shared site cost centers
+  return identityCandidates(opsList(kind, region, clff), year, previousMonths, currentMonths, e => segKeys(e, clff, biz));
+}
+export { inputState };
+export function averageOf(v, field, year, month = 0, isItem = false) {
+  const months = month ? [month - 1] : Array.from({length:opsActualCount(year)},(_,i)=>i);
+  const observed = (isItem ? v.itemCoverage?.[field] : v.fieldCoverage?.[field])?.[year];
+  const entered = months.filter(i=>v.coverage?.[year]?.[i] && observed?.[i]);
+  const values = isItem ? v.items?.[field]?.[year] : v[field]?.[year];
+  return entered.length ? entered.reduce((total,i)=>total+(values?.[i]||0),0)/entered.length : null;
+}
 
 // 집계 (v = view 객체)
 export const annualOf = (v, field, year) => sum(v?.[field]?.[year]);
@@ -101,7 +123,7 @@ export function anomaliesOf(v, { threshold = 0.3, baseline = EOKDONG } = {}) {
         // chg=null(='신규' 표기)은 전월이 정확히 0일 때만.
         const chg = prev !== 0 ? delta / Math.abs(prev) : null;
         if (chg != null && Math.abs(chg) < threshold) continue;
-        out.push({ item, year, month: m + 1, prev, cur, chg, delta });
+        out.push({ item, year, month: m + 1, prev, cur, chg, delta, inputState: inputState(v, year, [m], item) });
       }
     }
   }

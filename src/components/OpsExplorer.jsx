@@ -3,7 +3,12 @@ import { useState, useMemo } from 'react';
 import {
   OPS_YEARS, OPS_CURRENT, opsActualCount, OPS_SOURCE,
   opsList, opsGet, view, periodOf, periodYoyOf, anomaliesOf, allAnomalies, itemRanking,
+  inputState, averageOf,
 } from '../lib/ops';
+import EntityComparison from './EntityComparison';
+import IdentityReview from './IdentityReview';
+import AnalysisAction from './AnalysisAction';
+import { makeAnalysisPayload } from '../lib/analysisPayload';
 import { formatSmallMoney, formatLargeMoney, smallMoneyLabel, largeMoneyLabel } from '../lib/currency';
 import { useLang } from '../context/LangContext';
 
@@ -56,16 +61,19 @@ export default function OpsExplorer({ kind, groupNoun }) {
   const [sel, setSel] = useState(null);
   const [thr, setThr] = useState(30);
   const [query, setQuery] = useState('');
+  const [selected,setSelected]=useState([]);
+  const [selectionMessage,setSelectionMessage]=useState('');
+  function toggleCompare(name){setSelectionMessage('');setSelected(current=>current.includes(name)?current.filter(n=>n!==name):current.length<5?[...current,name]:current);if(!selected.includes(name)&&selected.length>=5)setSelectionMessage('최대 5개까지 비교할 수 있습니다.');}
   const searchKey = query.trim().normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '');
 
-  const setClffR = (c) => { setClff(c); setBiz('전체'); setSel(null); };
+  const setClffR = (c) => { setClff(c); setBiz('전체'); setSel(null); setSelected([]); };
   const scope = [clff !== '전체' && t(clff), biz !== '전체' && t(biz), region !== '전체' && t(region)].filter(Boolean).join(' · ') || t('전체');
 
   // 엔티티 + 뷰 (필터 반영) , 매출순 정렬
   const rows = useMemo(() => opsList(kind, region, clff)
-    .filter(e => !searchKey || e.name.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '').includes(searchKey))
+    .filter(e => !searchKey || [e.name,...(e.aliasNames||[]),...Object.values(e.data).flatMap(d=>d.sourceNames||[])].some(name=>name.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '').includes(searchKey)))
     .map((e) => ({ e, v: view(e, clff, biz) }))
-    .filter(({ v }) => ['revenue', 'directCost', 'grossProfit', 'opProfit'].some(f => month ? periodOf(v, f, year, month) !== 0 : (v[f]?.[year] || []).some(x => x !== 0)))
+    .filter(({ v }) => (month ? v.coverage?.[year]?.[month-1] : v.coverage?.[year]?.some(Boolean)) || ['revenue', 'directCost', 'grossProfit', 'opProfit'].some(f => month ? periodOf(v, f, year, month) !== 0 : (v[f]?.[year] || []).some(x => x !== 0)))
     .sort((a, b) => periodOf(b.v, 'revenue', year, month) - periodOf(a.v, 'revenue', year, month)),
     [kind, region, clff, biz, year, month, searchKey]);
 
@@ -88,7 +96,7 @@ export default function OpsExplorer({ kind, groupNoun }) {
       </div>
 
       <div className="flex gap-1.5 flex-wrap">{OPS_YEARS.map(y => <Chip key={y} active={year === y} onClick={() => changeYear(y)}>{y}{translateDisplay("년")}</Chip>)}</div>
-      {kind === 'customers' && <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label={translateDisplay('조회 월')}>
+      {<div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label={translateDisplay('조회 월')}>
         <FLabel ko="월" />
         <Chip active={month === 0} onClick={() => setMonth(0)}>{translateDisplay('누적')}</Chip>
         {Array.from({ length: opsActualCount(year) }, (_, i) => i + 1).map(m => <Chip key={m} active={month === m} onClick={() => setMonth(m)}>{m}{translateDisplay('월')}</Chip>)}
@@ -97,12 +105,12 @@ export default function OpsExplorer({ kind, groupNoun }) {
       {/* 필터: 지역 / 사업 / (CL일 때) 구분 */}
       <div className="space-y-1.5 text-xs">
         <div className="flex items-center gap-2 flex-wrap"><FLabel ko="지역" />
-          {REGIONS.map((r) => <Chip key={r} active={region === r} onClick={() => { setRegion(r); setSel(null); }}>{r}</Chip>)}</div>
+          {REGIONS.map((r) => <Chip key={r} active={region === r} onClick={() => { setRegion(r); setSel(null); setSelected([]); }}>{r}</Chip>)}</div>
         <div className="flex items-center gap-2 flex-wrap"><FLabel ko="사업" />
           {CLFFS.map((c) => <Chip key={c} active={clff === c} onClick={() => setClffR(c)}>{c}</Chip>)}</div>
         {clff === 'CL' && (
           <div className="flex items-center gap-2 flex-wrap"><FLabel ko="구분" />
-            {BIZS.map((b) => <Chip key={b} active={biz === b} onClick={() => { setBiz(b); setSel(null); }}>{b}</Chip>)}</div>
+            {BIZS.map((b) => <Chip key={b} active={biz === b} onClick={() => { setBiz(b); setSel(null); setSelected([]); }}>{b}</Chip>)}</div>
         )}
       </div>
       <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
@@ -116,22 +124,25 @@ export default function OpsExplorer({ kind, groupNoun }) {
           {!rows.length && <p className="text-xs text-slate-500">일치하는 실적이 없습니다. 이름 또는 지역·사업·연도 필터를 확인해주세요.</p>}
         </>}
       </div>
+      <p className="text-xs text-slate-500">목록의 체크박스로 최대 5개를 선택해 비교할 수 있습니다. {selectionMessage}</p>
+      <EntityComparison kind={kind} selected={selected} onRemove={toggleCompare} onClear={()=>setSelected([])} year={year} month={month} clff={clff} biz={biz} onPick={setSel}/>
+      <IdentityReview kind={kind} region={region} clff={clff} biz={biz} year={year} month={month}/>
       <div className="text-[11px] text-slate-400">{translateDisplay("현재 보기: ")}<b className="text-slate-600">{scope} · {periodLabel}</b></div>
       <p className="text-[11px] text-slate-500">{translateDisplay("급증·0원 전환에는 창고·고객 명칭 변경이나 비용 이관도 포함될 수 있습니다. 실제 누락 여부는 원본 확인이 필요합니다.")}</p>
 
-      {!selEntity && <OpsAlertCard topAnoms={topAnoms} thr={thr} setThr={setThr} onPick={setSel} groupNoun={groupNoun} />}
-      {!selEntity && <ProfitCard month={month} year={year} rows={rows} groupNoun={groupNoun} onPick={setSel} />}
+      {!selEntity && <OpsAlertCard kind={kind} scope={`${region}|${clff}|${biz}`} topAnoms={topAnoms} thr={thr} setThr={setThr} onPick={setSel} groupNoun={groupNoun} />}
+      {!selEntity && <ProfitCard kind={kind} scope={`${region}|${clff}|${biz}`} month={month} year={year} rows={rows} groupNoun={groupNoun} onPick={setSel} />}
 
       {!selEntity
-        ? <ListTable month={month} year={year} rows={rows} anomalyCount={anomalyCount} groupNoun={groupNoun} onPick={setSel} />
-        : <Detail month={month} year={year} setYear={y => { setYear(y); setMonth(0); }} e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} />}
+        ? <ListTable selected={selected} onCompare={toggleCompare} month={month} year={year} rows={rows} anomalyCount={anomalyCount} groupNoun={groupNoun} onPick={setSel} />
+        : <Detail onCompare={toggleCompare} selected={selected} kind={kind} month={month} year={year} setYear={y => { setYear(y); setMonth(0); }} e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} />}
 
       <p className="text-[11px] text-slate-400 text-center">{translateDisplay("출처: ")}{OPS_SOURCE?.title}{translateDisplay(" · 2023·2024년 지역·세부 사업 미지정 · 참고용, 원본과 교차확인 권장")}</p>
     </div>
   );
 }
 
-function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
+function OpsAlertCard({ kind, scope, topAnoms, thr, setThr, onPick, groupNoun }) {
   const [open, setOpen] = useState(true);
   return (
     <div className="bg-amber-50/70 rounded-xl border border-amber-100 p-3">
@@ -145,15 +156,15 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
         <div className="mt-2 space-y-1">
           {topAnoms.length === 0 && <div className="text-[12px] text-amber-700">{formatSmallMoney(100)} {smallMoneyLabel()}{translateDisplay(" 이상 변동 없음.")}</div>}
           {topAnoms.map((a, i) => (
-            <button key={i} onClick={() => onPick(a.entity)}
-              className="flex items-center gap-2 w-full text-left text-[12px] hover:bg-amber-100/60 rounded px-1.5 py-1">
+            <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"><button onClick={() => onPick(a.entity)}
+              className="flex flex-wrap sm:flex-nowrap min-w-0 items-center gap-2 w-full text-left text-[12px] hover:bg-amber-100/60 rounded px-1.5 py-1">
               <span className={`font-bold tabular-nums shrink-0 ${a.delta >= 0 ? 'text-red-500' : 'text-blue-600'}`}>{a.delta >= 0 ? '▲' : '▼'}{a.chg == null ? '신규' : Math.abs(a.chg * 100).toFixed(0) + '%'}</span>
               <span className="font-medium text-slate-700 truncate">{a.entity}</span>
               <span className="text-slate-400">·</span>
               <span className="text-slate-600 truncate">{a.item.replace(/^\d+\.\s*/, '')}</span>
               <span className="text-slate-400 shrink-0">{a.year.slice(2)}.{a.month}</span>
-              <span className="text-slate-400 ml-auto tabular-nums shrink-0">{mn(a.prev)}→{mn(a.cur)}</span>
-            </button>
+              <span className="text-slate-400 ml-auto tabular-nums shrink-0">{mn(a.prev)}→{a.inputState==='noRows'?'행 없음':a.inputState==='missingValue'?'미입력':mn(a.cur)}</span>
+            </button><AnalysisAction payload={makeAnalysisPayload({source:OPS_SOURCE,kind,entity:a.entity,item:a.item,scope,period:{by:a.year,bm:[a.month-2],cy:a.year,cm:[a.month-1]},reason:'cost',title:`${a.entity} · ${a.item} 원가 변동 확인`,evidence:`${a.year}년 ${a.month-1}→${a.month}월 · ${mn(a.prev)} → ${a.inputState==='noRows'?'행 없음':a.inputState==='missingValue'?'미입력':mn(a.cur)} ${smallMoneyLabel()} · 원본 입력 상태 ${a.inputState==='noRows'?'실적 행 없음':a.inputState==='missingValue'?'미입력':'입력 있음'}`,impact:`변동 ${mn(a.delta)} ${smallMoneyLabel()}`,question:'원본 금액과 명칭·배부 변경, 실제 운영 변동 여부를 확인해주세요.',facts:a})}/></div>
           ))}
           <div className="text-[10px] text-amber-600/80 pt-0.5">{translateDisplay("변동액 ")}{formatSmallMoney(100)} {smallMoneyLabel()}{translateDisplay(" 이상 + 전월비 ±")}{thr}{translateDisplay("% 이상. 클릭 → 해당 ")}{groupNoun}{translateDisplay(" 상세.")}</div>
         </div>
@@ -163,7 +174,7 @@ function OpsAlertCard({ topAnoms, thr, setThr, onPick, groupNoun }) {
 }
 
 /* 수익성 점검 — 적자/저마진 Top (현재 필터 기준) */
-function ProfitCard({ month, year, rows, groupNoun, onPick }) {
+function ProfitCard({ kind, scope, month, year, rows, groupNoun, onPick }) {
   const { t, lang } = useLang();
   const [open, setOpen] = useState(true);
   const ranked = rows.map(({ e, v }) => {
@@ -189,7 +200,7 @@ function ProfitCard({ month, year, rows, groupNoun, onPick }) {
                 <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{localizeText(`매출 ${largeMoneyLabel()}`, `Rev ${largeMoneyLabel()}`, lang)}</th>
                 <th className="text-right font-medium px-2 py-1.5 whitespace-nowrap">{localizeText(`영업이익 ${smallMoneyLabel()}`, `OP ${smallMoneyLabel()}`, lang)}</th>
                 <th className="text-right font-medium px-2 py-1.5">{localizeText('영업이익률', 'OP%', lang)}</th>
-                <th className="text-right font-medium px-2 py-1.5">{localizeText('매출이익률', 'GP%', lang)}</th>
+                <th className="text-right font-medium px-2 py-1.5">{localizeText('매출이익률', 'GP%', lang)}</th><th className="px-2 py-1.5">조치</th>
               </tr>
             </thead>
             <tbody>
@@ -200,6 +211,7 @@ function ProfitCard({ month, year, rows, groupNoun, onPick }) {
                   <td className={`text-right px-2 py-1.5 tabular-nums ${x.op < 0 ? 'text-red-500 font-semibold' : 'text-slate-600'}`}>{mn(x.op)}</td>
                   <td className={`text-right px-2 py-1.5 tabular-nums font-semibold ${x.opM < 0 ? 'text-red-500' : x.opM < 3 ? 'text-amber-600' : 'text-emerald-600'}`}>{x.opM == null ? '-' : x.opM.toFixed(1) + '%'}</td>
                   <td className={`text-right px-2 py-1.5 tabular-nums ${x.gpM < 0 ? 'text-red-500' : 'text-slate-500'}`}>{x.gpM == null ? '-' : x.gpM.toFixed(1) + '%'}</td>
+                  <td className="px-2 py-1.5" onClick={e=>e.stopPropagation()}><AnalysisAction payload={makeAnalysisPayload({source:OPS_SOURCE,kind,entity:x.name,item:'영업이익',scope,period:`${year}:${month||'YTD'}`,reason:'profitability',title:`${x.name} 수익성 확인`,evidence:`${year}년 ${month?month+'월':'누계'} · 매출 ${eok(x.rev)} ${largeMoneyLabel()} · 영업이익 ${mn(x.op)} ${smallMoneyLabel()} · 영업이익률 ${x.opM==null?'—':x.opM.toFixed(1)+'%'}`,question:'계약 조건, 물량, 단가와 비용 배부를 확인하고 개선 조치를 결정해주세요.',facts:x})}/></td>
                 </tr>
               ))}
             </tbody>
@@ -211,7 +223,7 @@ function ProfitCard({ month, year, rows, groupNoun, onPick }) {
   );
 }
 
-function ListTable({ month, year, rows, anomalyCount, groupNoun, onPick }) {
+function ListTable({ selected, onCompare, month, year, rows, anomalyCount, groupNoun, onPick }) {
   const { t, lang } = useLang();
   const U = (ko, en) => (localizeText(ko, en, lang));
   return (
@@ -220,7 +232,7 @@ function ListTable({ month, year, rows, anomalyCount, groupNoun, onPick }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-slate-400 text-xs border-b border-slate-100">
-              <th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white">{t(groupNoun)}</th>
+              <th className="px-2 py-2">비교</th><th className="text-left font-medium px-2.5 py-2 sticky left-0 bg-white">{t(groupNoun)}</th>
               <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('매출', 'Revenue')}<span className="block text-[8px] text-slate-300">{U(`${largeMoneyLabel()}`, `${largeMoneyLabel()}`)}</span></th>
               <th className="text-right font-medium px-2.5 py-2">{U('전년비', 'YoY')}</th>
               <th className="text-right font-medium px-2.5 py-2 whitespace-nowrap leading-tight">{U('직접원가', 'Direct Cost')}<span className="block text-[8px] text-slate-300">{U(`${largeMoneyLabel()}`, `${largeMoneyLabel()}`)}</span></th>
@@ -230,7 +242,7 @@ function ListTable({ month, year, rows, anomalyCount, groupNoun, onPick }) {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={7} className="px-3 py-4 text-center text-slate-400">{translateDisplay('선택한 기간·조건의 실적이 없습니다.')}</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={8} className="px-3 py-4 text-center text-slate-400">{translateDisplay('선택한 기간·조건의 실적이 없습니다.')}</td></tr>}
             {rows.map(({ e, v }) => {
               const rev = periodOf(v, 'revenue', year, month);
               const dc = periodOf(v, 'directCost', year, month);
@@ -241,6 +253,7 @@ function ListTable({ month, year, rows, anomalyCount, groupNoun, onPick }) {
               return (
                 <tr key={e.name} onClick={() => onPick(e.name)}
                   className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-blue-50/50">
+                  <td className="px-2 py-2" onClick={event=>event.stopPropagation()}><input type="checkbox" aria-label={`${e.name} 비교 선택`} checked={selected.includes(e.name)} onChange={()=>onCompare(e.name)}/></td>
                   <td className="text-left px-2.5 py-2 font-medium text-slate-700 sticky left-0 bg-white whitespace-nowrap">
                     {e.name}<span className="text-[10px] text-slate-400 ml-1">{e.region}{e.segs?.length ? '·' + e.segs.join('/') : ''}</span>
                   </td>
@@ -260,7 +273,7 @@ function ListTable({ month, year, rows, anomalyCount, groupNoun, onPick }) {
   );
 }
 
-function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
+function Detail({ onCompare, selected, kind, month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) {
   const { t } = useLang();
   const [bizD, setBizD] = useState(biz);   // 상세 내 운송/창고 재선택
   const v = useMemo(() => view(e, clff === 'FF' ? 'FF' : clff, clff === 'CL' ? bizD : '전체'), [e, clff, bizD]);
@@ -287,13 +300,14 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
         <button onClick={onBack} className="text-sm text-blue-600 font-medium">‹ {t(groupNoun)}</button>
-        <h2 className="text-base font-bold text-slate-800">{e.name}</h2>
+        <h2 className="text-base font-bold text-slate-800">{e.name}</h2><button className="rounded-lg border px-2 py-1 text-xs text-blue-700" onClick={()=>onCompare(e.name)}>{selected.includes(e.name)?'비교 해제':'비교 추가'}</button><AnalysisAction payload={makeAnalysisPayload({source:OPS_SOURCE,kind,entity:e.name,item:'실적',scope:`${e.region}|${clff}|${bizD}`,period:`${year}:${month||'YTD'}`,reason:'entity',title:`${e.name} 실적 확인`,evidence:`${year}년 ${month?month+'월':'누계'} · 매출 ${eok(periodOf(v,'revenue',year,month))} ${largeMoneyLabel()} · 영업이익 ${mn(periodOf(v,'opProfit',year,month))} ${smallMoneyLabel()}`,question:'실적 변동의 원인과 필요한 후속조치를 확인해주세요.'})}/>
         <span className="text-[11px] text-slate-400">{e.region}{e.segs?.length ? ' · ' + e.segs.join('/') : ''}</span>
         <div className="ml-auto flex gap-1">
           {OPS_YEARS.map((y) => <Chip key={y} active={year === y} onClick={() => setYear(y)}>{y.slice(2)}{translateDisplay("년")}</Chip>)}
         </div>
       </div>
 
+      <p className="text-xs text-slate-500">원본 이름: {[...new Set(Object.values(e.data).flatMap(d=>d.sourceNames||[]))].join(' / ')}{e.aliasNames?.length?' · 확인된 동일 거점으로 연결':''}</p>
       {segAvail && (
         <div className="flex items-center gap-2 flex-wrap text-xs">
           <span className="text-slate-400">{t('구분')}</span>
@@ -301,7 +315,7 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
         </div>
       )}
 
-      <p className="text-xs text-slate-500">{translateDisplay(`월평균 = ${month ? '선택 월' : '누계'} ÷ ${month ? 1 : n}개월 · 미집계 월 제외`)}</p>
+      <p className="text-xs text-slate-500">{translateDisplay('월평균 = 입력 월 합계 ÷ 입력 개월 · 입력 0 포함 · 미입력·행 없음 제외')}</p>
       <Card title={translateDisplay("월별 손익")} hint={translateDisplay(`${year}년${month ? ` ${month}월` : ''}${clff === 'CL' && bizD !== '전체' ? ' · ' + bizD : ''}`)}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="text-sm min-w-full">
@@ -323,10 +337,10 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
                     </td>
                     {months.map((i) => {
                       const x = s[i] || 0;
-                      return <td key={i} className={`text-right px-2 py-2 tabular-nums whitespace-nowrap ${i >= n ? 'text-slate-200' : x < 0 ? 'text-red-500' : 'text-slate-700'}`}>{row.f(x)}</td>;
+                      return <td key={i} className={`text-right px-2 py-2 tabular-nums whitespace-nowrap ${i >= n ? 'text-slate-200' : x < 0 ? 'text-red-500' : 'text-slate-700'}`}>{i>=n?'미집계':!v.coverage?.[year]?.[i]?'행 없음':!v.fieldCoverage?.[row.k]?.[year]?.[i]?'미입력':row.f(x)}</td>;
                     })}
                     <td className="text-right px-2.5 py-2 tabular-nums font-bold text-slate-800 bg-slate-50">{row.f(periodOf(v, row.k, year, month))}</td>
-                    <td className="text-right px-2.5 py-2 tabular-nums font-semibold text-blue-800 bg-blue-50">{row.f(periodOf(v, row.k, year, month) / (month ? 1 : n))}</td>
+                    <td className="text-right px-2.5 py-2 tabular-nums font-semibold text-blue-800 bg-blue-50">{averageOf(v,row.k,year,month)==null?'—':row.f(averageOf(v,row.k,year,month))}</td>
                   </tr>
                 );
               })}
@@ -360,12 +374,12 @@ function Detail({ month, year, setYear, e, clff, biz, thr, groupNoun, onBack }) 
                         <td key={i} className={`text-right px-2 py-2 tabular-nums whitespace-nowrap relative
                           ${i >= n ? 'text-slate-200' : flagged ? (fd >= 0 ? 'bg-red-50 text-red-600 font-semibold' : 'bg-blue-50 text-blue-600 font-semibold') : 'text-slate-600'}`}>
                           {flagged && <span className="absolute left-0.5 top-1.5 text-[9px]">{fd >= 0 ? '▲' : '▼'}</span>}
-                          {mn(x)}
+                          {i>=n?'미집계':inputState(v,year,[i],item)==='noRows'?'행 없음':inputState(v,year,[i],item)==='missingValue'?'미입력':mn(x)}
                         </td>
                       );
                     })}
                     <td className="text-right px-2.5 py-2 tabular-nums font-semibold text-slate-700 bg-slate-50">{mn(periodOf({ [item]: v.items?.[item] }, item, year, month))}</td>
-                    <td className="text-right px-2.5 py-2 tabular-nums font-semibold text-blue-800 bg-blue-50">{mn(periodOf({ [item]: v.items?.[item] }, item, year, month) / (month ? 1 : n))}</td>
+                    <td className="text-right px-2.5 py-2 tabular-nums font-semibold text-blue-800 bg-blue-50">{averageOf(v,item,year,month,true)==null?'—':mn(averageOf(v,item,year,month,true))}</td>
                   </tr>
                 );
               })}

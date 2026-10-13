@@ -3,6 +3,7 @@ import { lazy, Suspense, useState } from 'react';
 import { LangProvider } from './context/LangContext';
 import Layout from './components/Layout';
 import PlanPage from './pages/PlanPage';
+import { DecisionLinkProvider } from './context/DecisionLinkContext';
 
 const DecisionPage = lazy(() => import('./pages/DecisionPage'));
 const WarehousePage = lazy(() => import('./pages/WarehousePage'));
@@ -27,12 +28,15 @@ function AppContent() {
       default:          return <PlanPage />;
     }
   };
+  const navigate = value => {setPage(value);const url=new URL(window.location.href);url.searchParams.set('page',value);window.history.replaceState(null,'',url);};
   return (
-    <Layout currentPage={page} onNavigate={value=>{setPage(value);const url=new URL(window.location.href);url.searchParams.set('page',value);window.history.replaceState(null,'',url);}}>
+    <DecisionLinkProvider onNavigate={navigate}>
+    <Layout currentPage={page} onNavigate={navigate}>
       <Suspense fallback={<PageLoading />}>
         {render()}
       </Suspense>
     </Layout>
+    </DecisionLinkProvider>
   );
 }
 

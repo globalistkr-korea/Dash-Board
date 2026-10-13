@@ -51,4 +51,20 @@ class SourceGuards(unittest.TestCase):
         for value in ['#VALUE!','NaN',float('inf')]:
             with self.assertRaises(ValueError):amount(value)
 
+    def test_recorded_zero_rows_are_present_but_future_templates_are_not(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);wb=Workbook();ws=wb.active;ws.title='Customer PNL Raw 2026'
+            ws.append(['년','월','거점','고객명','고객명 (본사)','Biz1','Biz2','Region','Revenue','Direct Cost','Direct Profit','Indirect Cost','Gross Profit','영업이익','01. HANDLING FEE'])
+            ws.append([2026,1,'WH','Customer','Customer','CL','WM','North',1000000,600000,400000,100000,300000,200000,600000])
+            ws.append([2026,2,'WH','Customer','Customer','CL','WM','North',0,0,0,0,0,0,0])
+            ws.append([2026,2,'Other','Other','Other','CL','WM','North',1000000,600000,400000,100000,300000,200000,600000])
+            ws.append([2026,3,'WH','Customer','Customer','CL','WM','North',0,0,0,0,0,0,0])
+            path=root/'zeros.xlsx';wb.save(path);import_workbook(path,root)
+            data=json.loads((root/'ops.json').read_text())
+            d=data['warehouses']['WH']['data']['창고']
+            self.assertEqual(d['coverage']['2026'][:3],[True,True,False])
+            self.assertEqual(d['fieldCoverage']['revenue']['2026'][:3],[True,True,False])
+            self.assertEqual(d['itemCoverage']['01. HANDLING FEE']['2026'][:3],[True,True,False])
+            self.assertEqual(data['actualMonths']['2026'],2)
+
 if __name__=='__main__':unittest.main()

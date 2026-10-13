@@ -15,6 +15,8 @@ import {
 import { formatSmallMoney, smallMoneyLabel } from '../lib/currency';
 import { useLang } from '../context/LangContext';
 import { OPS_SOURCE } from '../lib/ops';
+import AnalysisAction from './AnalysisAction';
+import { makeAnalysisPayload } from '../lib/analysisPayload';
 
 const NOTE_PREFIX = 'vn_dashboard_report_notes_v1:';
 const SETTINGS_KEY = 'vn_dashboard_report_ratio_settings_v1';
@@ -383,12 +385,18 @@ function dropType(item, L) {
 }
 
 function alertType(alert, L) {
-  if (alert.type === 'zero') return L('0원 전환·누락 의심', 'Zero value / possible omission');
+  if (alert.type === 'nameChange') return L('명칭·배부 변경 후보', 'Possible rename / reallocation');
+  if (alert.type === 'noRows') return L('실적 행 없음 · 종료/이관 확인', 'No rows; check closure / transfer');
+  if (alert.type === 'missingValue') return L('원본 칸 미입력', 'Source cell not entered');
+  if (alert.type === 'zero') return L('원본 입력 0 · 급감 확인', 'Recorded zero; verify drop');
   if (alert.type === 'digit') return L('약 1/10 자릿수 의심', 'Possible 10× digit error');
   return L('70% 이상 급감', 'Drop of 70% or more');
 }
 
+function alertValue(alert,L){return alert.inputState==='noRows'?L('행 없음','No rows'):alert.inputState==='missingValue'?L('미입력','Not entered'):money(alert.cur);}
+
 function checkPriority(item, L) {
+  if(item.nameChange)return {score:40,label:L('명칭 확인','Review name'),className:'bg-slate-100 text-slate-600'};
   if (item.urgent && item.id.startsWith('data:')) {
     return {
       score: 100,
@@ -796,14 +804,16 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
     const targetType = alert.kind === 'warehouses' ? L('창고', 'Warehouse') : L('고객사', 'Customer');
     return {
       id: `data:${alert.kind}:${alert.entity}:${alert.item}`,
-      urgent: true,
+      urgent: !['nameChange','noRows'].includes(alert.type),
+      nameChange: ['nameChange','noRows'].includes(alert.type),
+      analysisKind: alert.kind, analysisEntity: alert.entity, analysisItem: alert.item, analysisFacts: alert,
       delta: (alert.cur || 0) - (alert.prev || 0),
       topWarehouse: alert.kind === 'warehouses' ? alert.entity : '-',
       topCustomer: alert.kind === 'customers' ? alert.entity : '-',
       title: `${targetType} ${alert.entity} · ${cleanItem(alert.item)} · ${alertType(alert, L)}`,
       evidence: L(
-        `${money(alert.prev)} → ${money(alert.cur)} ${smallMoneyLabel()} (${signed(alert.pct)}). 전체 합계에서 다른 대상의 증가와 상쇄되더라도 개별 입력값은 별도 점검이 필요합니다.`,
-        `${money(alert.prev)} → ${money(alert.cur)} ${smallMoneyLabel()} (${signed(alert.pct)}). This individual value needs review even if offset by increases elsewhere.`,
+        `${money(alert.prev)} → ${alertValue(alert,L)} ${smallMoneyLabel()}. ${alert.nextNames?.length?'명칭 변경 후보: '+alert.nextNames.join(', ')+'. 동일 거점 여부 미확인.':'실제 원인은 원본과 담당자 확인이 필요합니다.'}`,
+        `${money(alert.prev)} → ${alertValue(alert,L)} ${smallMoneyLabel()}. ${alert.nextNames?.length?'Possible rename: '+alert.nextNames.join(', ')+'. Physical site unconfirmed.':'Check source and owner for the actual cause.'}`,
       ),
       question: L(
         `${alert.entity} 담당자에게 원본 시트·전표의 ${cleanItem(alert.item)} 값이 실제 ${rawMoney(alert.cur)} mil VND인지 확인해 주세요. 0/누락, 소수점·자릿수 오류, 익월 이월, 계정 변경, 실제 운영량 감소 중 어느 경우인가요?`,
@@ -847,6 +857,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
       ),
     }] : []),
   ].slice(0, 10);
+  const actionPayload = item => makeAnalysisPayload({source:OPS_SOURCE,kind:item.analysisKind||'aggregate',entity:item.analysisEntity||[item.topWarehouse,item.topCustomer].filter(n=>n&&n!=='-').join(' / ')||'전체',item:item.analysisItem||item.id,scope:`${region}|${clff}|${biz}`,period:cmp,reason:item.analysisKind?'cost':item.id,title:item.title,evidence:item.evidence,question:item.question,impact:`변동 ${money(item.delta||0)} ${smallMoneyLabel()}`,facts:item.analysisFacts||{delta:item.delta||0,comparison:cmp}});
   const checkFilterOptions = [
     { id: 'all', label: L('전체 확인', 'All checks'), matcher: () => true },
     { id: 'urgent', label: L('입력 점검', 'Input check'), matcher: (item) => item.urgent },
@@ -1179,7 +1190,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
               {displayAlerts.map((alert) => (
                 <li key={`data-${alert.kind}-${alert.entity}-${alert.item}`}>
                   • <span className="text-rose-700 font-semibold">🚨 {alert.kind === 'warehouses' ? L('창고', 'Warehouse') : L('고객사', 'Customer')} {alert.entity}</span>
-                  {' · '}{cleanItem(alert.item)}: {money(alert.prev)} → {money(alert.cur)} {L(` ${smallMoneyLabel()}`, `${smallMoneyLabel()}`)}
+                  {' · '}{cleanItem(alert.item)}: {money(alert.prev)} → {alertValue(alert,L)} {L(` ${smallMoneyLabel()}`, `${smallMoneyLabel()}`)}
                   {' · '}<b className="text-rose-600">{alertType(alert, L)}</b>
                 </li>
               ))}
@@ -1218,7 +1229,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
                       </th>
                       <th className="py-1 px-2 text-left font-medium">{L('대표 창고', 'Top warehouse')}</th>
                       <th className="py-1 px-2 text-left font-medium">{L('대표 고객사', 'Top customer')}</th>
-                      <th className="py-1 pl-2 text-right font-medium">{L('상태', 'Status')}</th>
+                      <th className="py-1 pl-2 text-right font-medium">{L('상태', 'Status')}</th><th className="p-2 text-right font-medium">{L('후속조치','Action')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1240,7 +1251,7 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
                           <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-amber-700'}`}>
                             {item.confirmed ? L('확인 완료', 'Confirmed') : L('확인 필요', 'Check')}
                           </span>
-                        </td>
+                        </td><td className="p-2 text-right"><AnalysisAction payload={actionPayload(item)}/></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1345,11 +1356,11 @@ export default function ReportBriefing({ tag, cmp, clff, region, subtype, viewMo
                 const confirmed = Boolean(notes[item.id]?.trim());
                 return (
                   <div key={item.id} className={`rounded-md border bg-white p-2 ${item.urgent ? 'border-rose-200 ring-1 ring-rose-100' : 'border-slate-200'}`}>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${confirmed ? 'bg-emerald-100 text-emerald-700' : item.urgent ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
                         {confirmed ? L('확인 완료', 'Confirmed') : item.urgent ? L('입력 점검', 'Input check') : L('확인 필요', 'Check')}
                       </span>
-                      <b className="text-[12px] text-slate-700">{item.title}</b>
+                      <b className="text-[12px] text-slate-700">{item.title}</b><AnalysisAction payload={actionPayload(item)}/>
                       <button
                         type="button"
                         onClick={() => copyQuestion(item)}

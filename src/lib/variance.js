@@ -2,7 +2,7 @@
 // 비교는 일반형 cmp = {by, bm, cy, cm} (기준연/기준월들 → 비교연/비교월들).
 // plan3y(원, 사업/지역) + ops(동, 창고/고객/원가항목). 모든 수치는 데이터 산출(환각 없음).
 import { YEARS, CURRENT_YEAR, actualCount, series as planSeries } from './plan3y';
-import { opsList, view } from './ops';
+import { opsList, view, inputState, nameChangeCandidates } from './ops';
 
 const N = actualCount(CURRENT_YEAR);                       // 누계 개월(예:5)
 const PREV = YEARS[YEARS.indexOf(CURRENT_YEAR) - 1];
@@ -307,6 +307,7 @@ export function costItemContributors(kind, item, region = '전체', clff = '전�
 // 합계에서 상쇄되는 급감도 잡기 위해 엔티티별로 원가 항목을 검사한다.
 export function costDataQualityAlerts(kind, region = '전체', clff = '전체', biz = '전체', cmp, topN = 5) {
   const alerts = [];
+  const candidates = cmp.by === cmp.cy ? nameChangeCandidates(kind, region, clff, biz, cmp.cy, cmp.bm, cmp.cm) : [];
   for (const e of opsList(kind, region, clff)) {
     const v = view(e, clff, biz);
     for (const [item, itemSeries] of Object.entries(v.items || {})) {
@@ -314,8 +315,10 @@ export function costDataQualityAlerts(kind, region = '전체', clff = '전체', 
       const cur = pickSum(itemSeries[cmp.cy], cmp.cm);
       if (prev < 100 || cur < 0 || cur > prev * 0.3) continue;
       const ratio = prev ? cur / prev : null;
+      const state = inputState(v, cmp.cy, cmp.cm, item);
+      const nextNames = [...new Set(candidates.filter(c => c.from === e.name).map(c => c.to))];
       const type = cur === 0
-        ? 'zero'
+        ? state === 'noRows' ? nextNames.length ? 'nameChange' : 'noRows' : state === 'missingValue' ? 'missingValue' : 'zero'
         : ratio >= 0.07 && ratio <= 0.13
           ? 'digit'
           : 'drop';
@@ -329,10 +332,12 @@ export function costDataQualityAlerts(kind, region = '전체', clff = '전체', 
         delta: cur - prev,
         pct: prev ? ((cur - prev) / prev) * 100 : null,
         type,
+        inputState: state,
+        nextNames,
       });
     }
   }
-  const severity = { zero: 0, digit: 1, drop: 2 };
+  const severity = { missingValue: 0, zero: 1, digit: 2, drop: 3, noRows: 4, nameChange: 5 };
   return alerts
     .sort((a, b) => severity[a.type] - severity[b.type] || Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, topN);
