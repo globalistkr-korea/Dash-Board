@@ -55,16 +55,19 @@ export default function OpsExplorer({ kind, groupNoun }) {
   const [biz, setBiz] = useState('전체');
   const [sel, setSel] = useState(null);
   const [thr, setThr] = useState(30);
+  const [query, setQuery] = useState('');
+  const searchKey = query.trim().normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '');
 
   const setClffR = (c) => { setClff(c); setBiz('전체'); setSel(null); };
   const scope = [clff !== '전체' && t(clff), biz !== '전체' && t(biz), region !== '전체' && t(region)].filter(Boolean).join(' · ') || t('전체');
 
   // 엔티티 + 뷰 (필터 반영) , 매출순 정렬
   const rows = useMemo(() => opsList(kind, region, clff)
+    .filter(e => !searchKey || e.name.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '').includes(searchKey))
     .map((e) => ({ e, v: view(e, clff, biz) }))
     .filter(({ v }) => ['revenue', 'directCost', 'grossProfit', 'opProfit'].some(f => month ? periodOf(v, f, year, month) !== 0 : (v[f]?.[year] || []).some(x => x !== 0)))
     .sort((a, b) => periodOf(b.v, 'revenue', year, month) - periodOf(a.v, 'revenue', year, month)),
-    [kind, region, clff, biz, year, month]);
+    [kind, region, clff, biz, year, month, searchKey]);
 
   const anomalyCount = useMemo(() => {
     const map = {};
@@ -72,8 +75,8 @@ export default function OpsExplorer({ kind, groupNoun }) {
     return map;
   }, [rows, thr, year, month]);
   const topAnoms = useMemo(
-    () => allAnomalies(kind, region, clff, biz, { threshold: thr / 100 }).filter(a => a.year === year && (!month || a.month === month)).slice(0, 8),
-    [kind, region, clff, biz, thr, year, month]);
+    () => allAnomalies(kind, region, clff, biz, { threshold: thr / 100 }).filter(a => a.year === year && (!month || a.month === month) && (!searchKey || a.entity.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '').includes(searchKey))).slice(0, 8),
+    [kind, region, clff, biz, thr, year, month, searchKey]);
 
   const selEntity = sel ? opsGet(kind, sel) : null;
 
@@ -102,11 +105,22 @@ export default function OpsExplorer({ kind, groupNoun }) {
             {BIZS.map((b) => <Chip key={b} active={biz === b} onClick={() => { setBiz(b); setSel(null); }}>{b}</Chip>)}</div>
         )}
       </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+        <div className="flex gap-2">
+          <input type="search" aria-label={kind === 'customers' ? '고객사명 검색' : '창고명 검색'} placeholder={kind === 'customers' ? '고객사명 입력 · 예: SAMSUNG' : '창고명 입력 · 예: AJ'} value={query} onChange={event => { setQuery(event.target.value); setSel(null); }} onKeyDown={event => { if (event.key === 'Enter' && rows.length === 1) setSel(rows[0].e.name); }} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-blue-500" />
+          {query && <button className="shrink-0 text-sm text-slate-500" onClick={() => { setQuery(''); setSel(null); }}>초기화</button>}
+        </div>
+        {searchKey && <>
+          <p role="status" className="text-xs text-slate-500">검색 결과 {rows.length}개 · 현재 필터 기준 · 선택하면 상세 분석</p>
+          <div className="flex flex-wrap gap-2">{rows.slice(0, 10).map(({ e }) => <button key={e.name} onClick={() => setSel(e.name)} className={'rounded-lg border px-3 py-2 text-sm '+(sel === e.name ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 hover:bg-slate-50')}>{e.name}</button>)}</div>
+          {!rows.length && <p className="text-xs text-slate-500">일치하는 실적이 없습니다. 이름 또는 지역·사업·연도 필터를 확인해주세요.</p>}
+        </>}
+      </div>
       <div className="text-[11px] text-slate-400">{translateDisplay("현재 보기: ")}<b className="text-slate-600">{scope} · {periodLabel}</b></div>
       <p className="text-[11px] text-slate-500">{translateDisplay("급증·0원 전환에는 창고·고객 명칭 변경이나 비용 이관도 포함될 수 있습니다. 실제 누락 여부는 원본 확인이 필요합니다.")}</p>
 
-      <OpsAlertCard topAnoms={topAnoms} thr={thr} setThr={setThr} onPick={setSel} groupNoun={groupNoun} />
-      <ProfitCard month={month} year={year} rows={rows} groupNoun={groupNoun} onPick={setSel} />
+      {!selEntity && <OpsAlertCard topAnoms={topAnoms} thr={thr} setThr={setThr} onPick={setSel} groupNoun={groupNoun} />}
+      {!selEntity && <ProfitCard month={month} year={year} rows={rows} groupNoun={groupNoun} onPick={setSel} />}
 
       {!selEntity
         ? <ListTable month={month} year={year} rows={rows} anomalyCount={anomalyCount} groupNoun={groupNoun} onPick={setSel} />
