@@ -38,7 +38,6 @@ export const EN = {
   // 표/지표 보조
   '전년비': 'YoY',
   '합계': 'Total',
-  '누계': 'Cumulative',
   '월평균': 'Monthly average',
   '연간': 'Annual',
   '연도': 'Year',
