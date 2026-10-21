@@ -14,6 +14,7 @@ import { marginDiagnosis, cmpYTD, cmpMoM, cmpYoYMonth, subtypeToBiz, entityDetai
 import { formatSmallMoney, formatLargeMoney, smallMoneyLabel, largeMoneyLabel } from '../lib/currency';
 import { useLang } from '../context/LangContext';
 import quality from '../data/pnl_import_quality.json';
+import { MONTHLY_VIEW_KEY, normalizeMonthlyView, monthlyPeriod, monthlyMetricRows } from '../lib/monthlyPeriod';
 
 // 1,400줄 보고 브리핑(+Firebase 연동)은 지연 로딩 — 첫 화면 번들에서 분리
 const ReportBriefing = lazy(() => import('../components/ReportBriefing'));
@@ -33,7 +34,7 @@ function Chip({ active, onClick, children, accent = 'slate' }) {
   const { t } = useLang();
   const on = accent === 'blue' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-white';
   return (
-    <button onClick={onClick}
+    <button onClick={onClick} aria-pressed={active}
       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors
         ${active ? on : 'bg-white text-slate-600 border border-slate-200'}`}>
       {typeof children === 'string' ? t(children) : children}
@@ -323,69 +324,34 @@ function MonthTable({ metric, clff, region, subtype }) {
 }
 
 /* ── 월간 비교 (당월 vs 전월 vs 전년동월 + 누계) ──────────── */
-const arrSum = (a, n) => (a || []).slice(0, n).reduce((x, v) => x + (v || 0), 0);
-const pctOf = (cur, base) => (base ? ((cur - base) / Math.abs(base)) * 100 : null);
-const MONTHLY_VIEW_KEY = 'vn_dashboard_monthly_view_pnl_v2';
-const MONTHLY_VIEW_MODES = ['요약', '점검', '상세'];
-const MONTHLY_COMPARE_BASIS = ['mom', 'yoy', 'ytd'];
-
 function loadMonthlyViewState(lastActual) {
-  const fallback = {
-    month: lastActual,
-    viewMode: '요약',
-    compareBasis: lastActual > 1 ? 'mom' : 'yoy',
-  };
   try {
-    const saved = JSON.parse(localStorage.getItem(MONTHLY_VIEW_KEY) || '{}');
-    const savedMonth = Number(saved.month);
-    const month = Number.isFinite(savedMonth)
-      ? Math.min(Math.max(1, savedMonth), lastActual)
-      : fallback.month;
-    const compareBasis = MONTHLY_COMPARE_BASIS.includes(saved.compareBasis)
-      ? (month === 1 && saved.compareBasis === 'mom' ? 'yoy' : saved.compareBasis)
-      : fallback.compareBasis;
-    return {
-      month,
-      viewMode: MONTHLY_VIEW_MODES.includes(saved.viewMode) ? saved.viewMode : fallback.viewMode,
-      compareBasis,
-    };
+    return normalizeMonthlyView(JSON.parse(localStorage.getItem(MONTHLY_VIEW_KEY) || '{}'), lastActual);
   } catch {
-    return fallback;
+    return normalizeMonthlyView({}, lastActual);
   }
 }
 
 function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YEAR, setYear }) {
   const { t, lang } = useLang();
+  const L = (ko, en, vi) => lang === 'vi' ? vi : lang === 'en' ? en : ko;
   const meta = monthsMeta(CURRENT_YEAR);
   const lastActual = actualCount(CURRENT_YEAR);
-  const [m, setM] = useState(() => loadMonthlyViewState(lastActual).month);          // 선택 월(1~12)
+  const [m, setM] = useState(() => loadMonthlyViewState(lastActual).month); // 0=전체 실적, 1~12=월
   const [viewMode, setViewMode] = useState(() => loadMonthlyViewState(lastActual).viewMode);
   const [compareBasis, setCompareBasis] = useState(() => loadMonthlyViewState(lastActual).compareBasis);
   const prevYear = String(Number(CURRENT_YEAR) - 1);
-  const type = meta[m - 1].type;                    // 실적 | 계획
-  const hasPreviousYear = YEARS.includes(prevYear) && !(region !== '전체' && Number(CURRENT_YEAR) <= 2025);
-  const effectiveBasis = !hasPreviousYear ? 'mom' : m === 1 && compareBasis === 'mom' ? 'yoy' : compareBasis;
+  const period = monthlyPeriod({ year: CURRENT_YEAR, month: m, actualCount: lastActual,
+    previousActualCount: YEARS.includes(prevYear) ? actualCount(prevYear) : 0,
+    hasPreviousYear: YEARS.includes(prevYear) && !(region !== '전체' && Number(CURRENT_YEAR) <= 2025), compareBasis });
+  const { isAll, throughMonth, hasPreviousYear, basis: effectiveBasis } = period;
+  const type = meta[throughMonth - 1]?.type || '실적';
 
   useEffect(() => {
-    localStorage.setItem(MONTHLY_VIEW_KEY, JSON.stringify({ month: m, viewMode, compareBasis: effectiveBasis }));
+    try { localStorage.setItem(MONTHLY_VIEW_KEY, JSON.stringify({ month: m, viewMode, compareBasis: effectiveBasis })); } catch { /* Keep the selected period in memory. */ }
   }, [m, viewMode, effectiveBasis]);
 
-  const rows = PL_METRICS.map((metric) => {
-    const cur = series(CURRENT_YEAR, metric, clff, region, subtype);
-    const prv = series(prevYear, metric, clff, region, subtype);
-    const cm = cur[m - 1] ?? 0;
-    const pm = m >= 2 ? cur[m - 2] : null;          // 전월
-    const ym = hasPreviousYear ? prv[m - 1] : null;
-    const ytdC = arrSum(cur, m), ytdP = hasPreviousYear ? arrSum(prv, m) : null;
-    const annual = arrSum(cur, 12);
-    return {
-      metric, cm, pm, ym, annual,
-      mom: pm == null ? null : pctOf(cm, pm),
-      yoy: hasPreviousYear ? pctOf(cm, ym) : null,
-      ytdC, ytdP, ytdYoy: hasPreviousYear ? pctOf(ytdC, ytdP) : null,
-      progress: annual ? (ytdC / annual) * 100 : null,
-    };
-  });
+  const rows = monthlyMetricRows(PL_METRICS, (year, metric) => series(year, metric, clff, region, subtype), period);
 
   const moLabel = (i) => (localizeText(`${i + 1}월`, `${i + 1}`, lang));
   const viewOptions = [
@@ -394,10 +360,29 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
     { id: '상세', label: localizeText('상세', 'Detail', lang) },
   ];
   const basisOptions = [
-    { id: 'mom', label: localizeText('전월비', 'MoM', lang), disabled: m === 1 },
-    { id: 'yoy', disabled: !hasPreviousYear, label: localizeText('전년동월비', 'YoY month', lang) },
-    { id: 'ytd', disabled: !hasPreviousYear, label: localizeText('누계 전년비', 'YTD YoY', lang) },
+    { id: 'mom', label: localizeText('전월비', 'MoM', lang), disabled: isAll || m === 1 },
+    { id: 'yoy', disabled: isAll || !hasPreviousYear, label: localizeText('전년동월비', 'YoY month', lang) },
+    { id: 'ytd', disabled: !hasPreviousYear, label: isAll ? L('전년 동일기간 누계', 'Same-period YTD', 'Lũy kế cùng kỳ') : localizeText('누계 전년비', 'YTD YoY', lang) },
   ];
+  const periodLabel = year => L(`${year}년 1~${throughMonth}월`, `${year} 1–${throughMonth}M`, `${year} T1–T${throughMonth}`);
+  const cumulativeTable = <Card title={isAll ? L('전년 동일기간 누계 비교', 'Same-period YTD comparison', 'So sánh lũy kế cùng kỳ') : translateDisplay('누계 비교')}
+    hint={`${periodLabel(prevYear)} → ${periodLabel(CURRENT_YEAR)}`}>
+    <div className="overflow-x-auto scrollbar-thin"><table className="w-full text-sm" aria-label={L('실적 누계 비교', 'Actual YTD comparison', 'So sánh lũy kế thực tế')}>
+      <thead><tr className="text-slate-400 text-xs border-b border-slate-100">
+        <th className="text-left font-medium px-3 py-2.5">{t('항목')}</th>
+        <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{periodLabel(prevYear)}</th>
+        <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap bg-blue-50/50 text-blue-700">{periodLabel(CURRENT_YEAR)}</th>
+        {isAll && <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{L('증감액', 'Change', 'Chênh lệch')}</th>}
+        <th className="text-right font-medium px-3 py-2.5">{t('전년비')}</th>
+        {!isAll && <><th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{translateDisplay('입력 실적 합계')}</th><th className="text-right font-medium px-3 py-2.5">{translateDisplay('입력 합계 대비')}</th></>}
+      </tr></thead>
+      <tbody>{rows.map(r => <tr key={r.metric} className="border-b border-slate-50 last:border-0">
+        <MetricCell metric={r.metric} t={t}/><NumCell v={r.ytdP} metric={r.metric}/><NumCell v={r.ytdC} metric={r.metric} bold hl/>
+        {isAll && <NumCell v={r.ytdDelta} metric={r.metric}/>}<PctCell v={r.ytdYoy}/>
+        {!isAll && <><NumCell v={r.annual} metric={r.metric}/><td className="text-right px-3 py-2.5 tabular-nums text-slate-500">{r.progress == null ? '-' : `${r.progress.toFixed(0)}%`}</td></>}
+      </tr>)}</tbody>
+    </table></div>
+  </Card>;
 
   return (
     <>
@@ -415,20 +400,25 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs text-slate-400 mr-1">{translateDisplay("기준 연도")}</span>
         {YEARS.map((year) => <Chip key={year} active={year === CURRENT_YEAR} onClick={() => {
-          setYear(year); setM(actualCount(year)); localStorage.setItem('vn-pnl-year', year);
+          setYear(year); setM(current => current === 0 ? 0 : actualCount(year)); localStorage.setItem('vn-pnl-year', year);
           if (Number(year) <= 2024) onHistoricalYear();
           if (year === YEARS[0]) setCompareBasis('mom');
         }}>{year}{translateDisplay("년")}</Chip>)}
       </div>
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label={localizeText('기준 월', 'Month', lang)}>
         <span className="text-xs text-slate-400 mr-1">{localizeText('기준 월', 'Month', lang)}</span>
+        <button type="button" aria-pressed={isAll} onClick={() => { setM(0); setCompareBasis('ytd'); }}
+          className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${isAll ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-600'}`}>
+          {L(`전체(1~${lastActual}월)`, `All (1–${lastActual}M)`, `Tất cả (T1–T${lastActual})`)}
+        </button>
         {meta.map((mo, i) => (
           <button
             key={i}
             onClick={() => {
               setM(i + 1);
-              if (i === 0 && compareBasis === 'mom') setCompareBasis('yoy');
+              if (isAll || i === 0 && compareBasis === 'mom') setCompareBasis('yoy');
             }}
+            aria-pressed={m === i + 1}
             disabled={i + 1 > lastActual}
             className={`w-9 py-1 rounded-lg text-xs font-medium transition-colors
               ${m === i + 1 ? 'bg-blue-700 text-white' : mo.type === '실적' ? 'bg-white text-slate-600 border border-slate-200' : 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed'}`}>
@@ -439,7 +429,7 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
 
       <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-2.5 space-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-blue-900">{localizeText('북부 월간 업무 보기', 'Monthly workflow', lang)}</span>
+          <span className="text-[11px] font-semibold text-blue-900">{isAll ? L('전체 실적 비교', 'Full-period workflow', 'So sánh toàn kỳ') : localizeText('북부 월간 업무 보기', 'Monthly workflow', lang)}</span>
           <span className="text-[10px] text-blue-500">{localizeText('중복을 줄이기 위해 선택한 비교 기준만 펼칩니다.', 'Show only one comparison detail to reduce repetition.', lang)}</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -449,6 +439,7 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
               key={option.id}
               type="button"
               onClick={() => setViewMode(option.id)}
+              aria-pressed={viewMode === option.id}
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${viewMode === option.id ? 'border-blue-500 bg-white text-blue-700 shadow-sm' : 'border-blue-100 bg-white/60 text-slate-500'}`}
             >
               {option.label}
@@ -463,6 +454,7 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
               type="button"
               disabled={option.disabled}
               onClick={() => setCompareBasis(option.id)}
+              aria-pressed={effectiveBasis === option.id}
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-40 ${effectiveBasis === option.id ? 'border-amber-500 bg-white text-amber-700 shadow-sm' : 'border-blue-100 bg-white/60 text-slate-500'}`}
             >
               {option.label}
@@ -472,6 +464,8 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
       </div>
 
       {/* 당월 비교 */}
+      {isAll && cumulativeTable}
+      {!isAll && (
       <Card title={translateDisplay("당월 비교")} hint={`${moLabel(m - 1)} · ${t(type)}`}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
@@ -500,51 +494,23 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
           </table>
         </div>
       </Card>
+      )}
 
       {/* 선택 기준 변동 원인 분석 */}
-      {(hasPreviousYear || m > 1) && <VarianceCard
+      {period.comparison && <VarianceCard
         clff={clff}
         region={region}
         subtype={subtype}
         mode={effectiveBasis === 'ytd' ? 'ytd' : 'month'}
         basis={effectiveBasis}
         viewMode={viewMode}
-        month={m} year={CURRENT_YEAR}
+        month={throughMonth} year={CURRENT_YEAR} comparison={period.comparison}
       />}
 
       {/* 누계 비교 */}
-      {(effectiveBasis === 'ytd' || viewMode === '상세') && (
-      <Card title={translateDisplay("누계 비교")} hint={`1~${moLabel(m - 1)} · ${t('누계')}`}>
-        <div className="overflow-x-auto scrollbar-thin">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-slate-400 text-xs border-b border-slate-100">
-                <th className="text-left font-medium px-3 py-2.5">{t('항목')}</th>
-                <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{`${prevYear.slice(2)} ${t('누계')}`}</th>
-                <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap bg-blue-50/50 text-blue-700">{`${CURRENT_YEAR.slice(2)} ${t('누계')}`}</th>
-                <th className="text-right font-medium px-3 py-2.5">{t('전년비')}</th>
-                <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">{translateDisplay("입력 실적 합계")}</th>
-                <th className="text-right font-medium px-3 py-2.5">{translateDisplay("입력 합계 대비")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.metric} className="border-b border-slate-50 last:border-0">
-                  <MetricCell metric={r.metric} t={t} />
-                  <NumCell v={r.ytdP} metric={r.metric} />
-                  <NumCell v={r.ytdC} metric={r.metric} bold hl />
-                  <PctCell v={r.ytdYoy} />
-                  <NumCell v={r.annual} metric={r.metric} />
-                  <td className="text-right px-3 py-2.5 tabular-nums text-slate-500">{r.progress == null ? '-' : `${r.progress.toFixed(0)}%`}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      )}
+      {!isAll && (effectiveBasis === 'ytd' || viewMode === '상세') && cumulativeTable}
 
-      <p className="text-[11px] text-slate-400 text-center">{localizeText(`당월=전월·전년동월 대비, 누계=전년 동일기간 대비·입력 실적 비중 · 단위 매출 ${largeMoneyLabel()}/이익 ${smallMoneyLabel()}`, 'Current month vs prev month / same month last year · YTD vs last year & annual progress', lang)}</p>
+      <p className="text-[11px] text-slate-400 text-center">{isAll ? L(`전체=1~${lastActual}월 입력 실적 · 전년도도 같은 기간으로 비교합니다.`, `All = actuals for months 1–${lastActual}; prior year uses the same months.`, `Tất cả = thực tế T1–T${lastActual}; năm trước dùng cùng kỳ.`) : localizeText(`당월=전월·전년동월 대비, 누계=전년 동일기간 대비·입력 실적 비중 · 단위 매출 ${largeMoneyLabel()}/이익 ${smallMoneyLabel()}`, 'Current month vs prev month / same month last year · YTD vs last year & annual progress', lang)}</p>
     </>
   );
 }
@@ -691,11 +657,11 @@ function VarianceSection({ tag, color, cmp, clff, region, subtype, viewMode = '�
 }
 
 /* 변동 원인 상세 — 전월비/전년비 섹션으로 창고·고객·원가 사유 전개. mode: 'ytd'|'month' */
-function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', viewMode = '상세', month = actualCount(CURRENT_YEAR), year = CURRENT_YEAR }) {
+function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', viewMode = '상세', month = actualCount(CURRENT_YEAR), year = CURRENT_YEAR, comparison = null }) {
   const { lang } = useLang();
   const L = (ko, en) => (localizeText(ko, en, lang));
   const monthCmp = cmpMoM(month, year);
-  const primaryCmp = mode === 'month' ? (monthCmp || cmpYoYMonth(month, year)) : cmpYTD(month, year);
+  const primaryCmp = comparison || (mode === 'month' ? basis === 'mom' && monthCmp ? monthCmp : cmpYoYMonth(month, year) : cmpYTD(month, year));
   const overall = marginDiagnosis(primaryCmp, clff, region, subtype);
   if (overall.revYoY == null || overall.gpYoY == null) return null;
   const anyAnom = overall.anomaly || (overall.marginPp != null && overall.marginPp <= -0.5);
@@ -707,18 +673,18 @@ function VarianceCard({ clff, region, subtype, mode = 'ytd', basis = 'mom', view
     ? (basis === 'mom' && monthCmp ? [{
           tag: L(`전월비 ${month - 1}→${month}월`, `MoM ${month - 1}→${month}M`),
           color: 'text-amber-800',
-          cmp: monthCmp,
+          cmp: primaryCmp,
         }] : [{
           tag: month === 1
             ? L('1월 전년동월비 · 1월 누계 동일', 'January YoY · same as January YTD')
             : L(`전년동월비 ${month}월`, `YoY ${month}M`),
           color: 'text-indigo-700',
-          cmp: cmpYoYMonth(month, year),
+          cmp: primaryCmp,
         }])
     : [{
         tag: L(`1~${month}월 누계 전년비`, `YTD through ${month}M YoY`),
         color: 'text-amber-800',
-        cmp: cmpYTD(month, year),
+        cmp: primaryCmp,
       }];
 
   return (
