@@ -1,5 +1,5 @@
 import { localizeText, translateDisplay } from "../lib/i18n";
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   OPS_YEARS, OPS_CURRENT, opsActualCount, OPS_SOURCE,
   opsList, opsGet, view, periodOf, periodYoyOf, anomaliesOf, allAnomalies, itemRanking,
@@ -7,6 +7,7 @@ import {
 } from '../lib/ops';
 import EntityComparison from './EntityComparison';
 import CumulativeComparison from './CumulativeComparison';
+import CustomerRankings from './CustomerRankings';
 import IdentityReview from './IdentityReview';
 import AnalysisAction from './AnalysisAction';
 import { makeAnalysisPayload } from '../lib/analysisPayload';
@@ -60,6 +61,8 @@ export default function OpsExplorer({ kind, groupNoun }) {
   const [clff, setClff] = useState('전체');
   const [biz, setBiz] = useState('전체');
   const [sel, setSel] = useState(null);
+  const detailRef = useRef(null);
+  useEffect(() => { if (sel) detailRef.current?.scrollIntoView({ block: 'start' }); }, [sel]);
   const [thr, setThr] = useState(30);
   const [query, setQuery] = useState('');
   const [selected,setSelected]=useState([]);
@@ -71,12 +74,13 @@ export default function OpsExplorer({ kind, groupNoun }) {
   const scope = [clff !== '전체' && t(clff), biz !== '전체' && t(biz), region !== '전체' && t(region)].filter(Boolean).join(' · ') || t('전체');
 
   // 엔티티 + 뷰 (필터 반영) , 매출순 정렬
-  const rows = useMemo(() => opsList(kind, region, clff)
+  const scopedRows = useMemo(() => opsList(kind, region, clff)
     .filter(e => !searchKey || [e.name,...(e.aliasNames||[]),...Object.values(e.data).flatMap(d=>d.sourceNames||[])].some(name=>name.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '').includes(searchKey)))
-    .map((e) => ({ e, v: view(e, clff, biz) }))
+    .map((e) => ({ e, v: view(e, clff, biz) })), [kind, region, clff, biz, searchKey]);
+  const rows = useMemo(() => scopedRows
     .filter(({ v }) => (month ? v.coverage?.[year]?.[month-1] : v.coverage?.[year]?.some(Boolean)) || ['revenue', 'directCost', 'grossProfit', 'opProfit'].some(f => month ? periodOf(v, f, year, month) !== 0 : (v[f]?.[year] || []).some(x => x !== 0)))
     .sort((a, b) => periodOf(b.v, 'revenue', year, month) - periodOf(a.v, 'revenue', year, month)),
-    [kind, region, clff, biz, year, month, searchKey]);
+    [scopedRows, year, month]);
 
   const anomalyCount = useMemo(() => {
     const map = {};
@@ -131,12 +135,13 @@ export default function OpsExplorer({ kind, groupNoun }) {
       <div className="text-[11px] text-slate-400">{translateDisplay("현재 보기: ")}<b className="text-slate-600">{scope} · {periodLabel}</b></div>
       <p className="text-[11px] text-slate-500">{translateDisplay("급증·0원 전환에는 창고·고객 명칭 변경이나 비용 이관도 포함될 수 있습니다. 실제 누락 여부는 원본 확인이 필요합니다.")}</p>
 
+      {kind === 'customers' && !selEntity && <CustomerRankings rows={scopedRows} year={year} month={month} region={region} onPick={setSel}/>}
       {!selEntity && <OpsAlertCard kind={kind} scope={`${region}|${clff}|${biz}`} topAnoms={topAnoms} thr={thr} setThr={setThr} onPick={setSel} groupNoun={groupNoun} />}
       {!selEntity && <ProfitCard kind={kind} scope={`${region}|${clff}|${biz}`} month={month} year={year} rows={rows} groupNoun={groupNoun} onPick={setSel} />}
 
       {!selEntity
         ? <ListTable selected={selected} onCompare={toggleCompare} month={month} year={year} rows={rows} anomalyCount={anomalyCount} groupNoun={groupNoun} onPick={setSel} />
-        : <Detail onCompare={toggleCompare} selected={selected} kind={kind} month={month} year={year} setYear={y => { setYear(y); setMonth(0); }} e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} />}
+        : <div ref={detailRef} className="scroll-mt-20"><Detail onCompare={toggleCompare} selected={selected} kind={kind} month={month} year={year} setYear={y => { setYear(y); setMonth(0); }} e={selEntity} clff={clff} biz={biz} thr={thr} groupNoun={groupNoun} onBack={() => setSel(null)} /></div>}
 
       <p className="text-[11px] text-slate-400 text-center">{translateDisplay("출처: ")}{OPS_SOURCE?.title}{translateDisplay(" · 2023·2024년 지역·세부 사업 미지정 · 참고용, 원본과 교차확인 권장")}</p>
     </div>
