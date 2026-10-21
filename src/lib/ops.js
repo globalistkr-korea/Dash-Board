@@ -2,8 +2,8 @@
 // 원본 단위: mil VND(백만동). 표시: 매출·직접원가=bil VND(÷1000), 이익·원가항목=mil VND
 // 세그먼트: 창고/운송/FF/기타 (CL = 창고+운송). entity.data[seg]{revenue/.../items}.
 import raw from '../data/ops.json';
-import { canonicalWarehouses, inputState, identityCandidates } from './entityIdentity';
-const entities = { warehouses: canonicalWarehouses(raw.warehouses), customers: raw.customers };
+import { canonicalWarehouses, canonicalCustomers, inputState, identityCandidates } from './entityIdentity';
+const entities = { warehouses: canonicalWarehouses(raw.warehouses), customers: canonicalCustomers(raw.customers) };
 
 export const OPS_YEARS = raw.years;                 // ['2025','2026']
 export const OPS_CURRENT = OPS_YEARS[OPS_YEARS.length - 1];

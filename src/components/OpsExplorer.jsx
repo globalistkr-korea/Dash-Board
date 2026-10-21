@@ -6,6 +6,7 @@ import {
   inputState, averageOf,
 } from '../lib/ops';
 import EntityComparison from './EntityComparison';
+import CumulativeComparison from './CumulativeComparison';
 import IdentityReview from './IdentityReview';
 import AnalysisAction from './AnalysisAction';
 import { makeAnalysisPayload } from '../lib/analysisPayload';
@@ -307,7 +308,7 @@ function Detail({ onCompare, selected, kind, month, year, setYear, e, clff, biz,
         </div>
       </div>
 
-      <p className="text-xs text-slate-500">원본 이름: {[...new Set(Object.values(e.data).flatMap(d=>d.sourceNames||[]))].join(' / ')}{e.aliasNames?.length?' · 확인된 동일 거점으로 연결':''}</p>
+      <p className="text-xs text-slate-500">원본 이름: {[...new Set(Object.values(e.data).flatMap(d=>d.sourceNames||[]))].join(' / ')}{e.aliasNames?.length?kind==='customers'?' · 확인된 동일 고객사로 연결':' · 확인된 동일 거점으로 연결':''}</p>
       {segAvail && (
         <div className="flex items-center gap-2 flex-wrap text-xs">
           <span className="text-slate-400">{t('구분')}</span>
@@ -315,6 +316,7 @@ function Detail({ onCompare, selected, kind, month, year, setYear, e, clff, biz,
         </div>
       )}
 
+      <CumulativeComparison v={v} year={year} month={month}/>
       <p className="text-xs text-slate-500">{translateDisplay('월평균 = 입력 월 합계 ÷ 입력 개월 · 입력 0 포함 · 미입력·행 없음 제외')}</p>
       <Card title={translateDisplay("월별 손익")} hint={translateDisplay(`${year}년${month ? ` ${month}월` : ''}${clff === 'CL' && bizD !== '전체' ? ' · ' + bizD : ''}`)}>
         <div className="overflow-x-auto scrollbar-thin">

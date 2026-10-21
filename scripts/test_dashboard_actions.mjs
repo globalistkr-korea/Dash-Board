@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { canonicalWarehouses, inputState, identityCandidates } from '../src/lib/entityIdentity.js';
+import { canonicalWarehouses, canonicalCustomers, inputState, identityCandidates } from '../src/lib/entityIdentity.js';
 import { entityComparison, comparisonMonths } from '../src/lib/entityComparison.js';
 import { analysisSourceKey, analysisIssueId, analysisDraft } from '../src/lib/analysisDecision.js';
 const raw=JSON.parse(readFileSync(new URL('../src/data/ops.json',import.meta.url),'utf8'));
@@ -27,6 +27,31 @@ test('Different region, transport segment or new cost center blocks alias joinin
   const source=structuredClone(raw.warehouses);mutate(source.HAINAM);assert.ok(canonicalWarehouses(source).HAINAM);
  }
  const joined=canonicalWarehouses(raw.warehouses);for(const name of ['VATD North (북부)','NGUYEN KHE','SGF LONG AN','DUY HUNG'])assert.deepEqual(joined[name],raw.warehouses[name]);
+});
+test('User-confirmed SPIN MASTER joins only the north source and keeps all amounts and original names',()=>{
+ const before=JSON.stringify(raw.customers);const joined=canonicalCustomers(raw.customers);
+ const oldName='SPIN MASTER TOYS FAR EAST LIMITED (북부)';
+ assert.equal(JSON.stringify(raw.customers),before);assert.equal(joined[oldName],undefined);
+ assert.ok(joined['SPIN MASTER'].aliasNames.includes(oldName));
+ assert.deepEqual(joined['SPIN MASTER TOYS FAR EAST LIMITED (미지정)'],raw.customers['SPIN MASTER TOYS FAR EAST LIMITED (미지정)']);
+ for(const year of raw.years)for(const field of fields)for(let m=0;m<12;m++)assert.ok(Math.abs(sum(joined,field,year,m)-sum(raw.customers,field,year,m))<0.00001);
+ for(const year of raw.years)for(const item of raw.costItems)for(let m=0;m<12;m++){
+  const cost=table=>Object.values(table).reduce((n,e)=>n+Object.values(e.data).reduce((s,d)=>s+(d.items?.[item]?.[year]?.[m]||0),0),0);
+  assert.ok(Math.abs(cost(joined)-cost(raw.customers))<0.00001);
+ }
+ for(const segment of ['FF','운송']){
+  const d=joined['SPIN MASTER'].data[segment];
+  assert.ok(d.sourceNames.includes('SPIN MASTER'));
+  assert.ok(d.sourceNames.includes('SPIN MASTER TOYS FAR EAST LIMITED'));
+  assert.deepEqual(d.revenue['2025'],raw.customers[oldName].data[segment].revenue['2025']);
+  assert.deepEqual(d.revenue['2026'],raw.customers['SPIN MASTER'].data[segment].revenue['2026']);
+ }
+});
+test('SPIN MASTER alias rejects other regions, unrelated segments and new source/target cost centers',()=>{
+ const oldName='SPIN MASTER TOYS FAR EAST LIMITED (북부)';
+ for(const mutate of [source=>source[oldName].region='남부',source=>source[oldName].data['창고']=structuredClone(source[oldName].data['운송']),source=>source[oldName].data['운송'].costCenters['2025'][0]=['NEW-SITE'],source=>source['SPIN MASTER'].data.FF.costCenters['2026'][0]=['NEW-SITE']]){
+  const source=structuredClone(raw.customers);mutate(source);assert.ok(canonicalCustomers(source)[oldName]);
+ }
 });
 test('No rows, empty cell and recorded zero have distinct input states',()=>{
  const v={coverage:{2026:[true,true,false]},itemCoverage:{cost:{2026:[true,false,false]}}};

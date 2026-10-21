@@ -4,6 +4,11 @@ export const CONFIRMED_WAREHOUSE_ALIASES = [{
   costCenters: { '창고': ['3120083019'], '운송': ['3120083015'] },
   reason: '사용자 확인 · 동일 거점',
 }];
+export const CONFIRMED_CUSTOMER_ALIASES = [{
+  canonical: 'SPIN MASTER', aliases: ['SPIN MASTER TOYS FAR EAST LIMITED (북부)'], region: '북부',
+  costCenters: { FF: ['3320080004'], '운송': ['3320081001', '3320081007'] },
+  reason: '사용자 확인(2026-10-14) · 동일 고객사',
+}];
 const fields = ['revenue', 'directCost', 'directProfit', 'indirectCost', 'grossProfit', 'opProfit'];
 function addSeries(target, source, boolean = false) {
   for (const [year, series] of Object.entries(source || {})) {
@@ -32,9 +37,9 @@ function safeAlias(entity, rule) {
     return allowed && centers.length > 0 && centers.every(cc => allowed.includes(cc));
   });
 }
-export function canonicalWarehouses(source) {
+function canonicalEntities(source, rules) {
   const output = structuredClone(source);
-  for (const rule of CONFIRMED_WAREHOUSE_ALIASES) {
+  for (const rule of rules) {
     const target = output[rule.canonical];
     if (!target || target.region !== rule.region) continue;
     for (const name of rule.aliases) {
@@ -50,6 +55,9 @@ export function canonicalWarehouses(source) {
   }
   return output;
 }
+export const canonicalWarehouses = source => canonicalEntities(source, CONFIRMED_WAREHOUSE_ALIASES);
+export const canonicalCustomers = source => canonicalEntities(source, CONFIRMED_CUSTOMER_ALIASES
+  .filter(rule => source[rule.canonical] && safeAlias(source[rule.canonical], rule)));
 export function inputState(v, year, months, item = null) {
   if (!v.coverage) return 'unknown';
   if (!months.some(i => v.coverage[year]?.[i])) return 'noRows';
