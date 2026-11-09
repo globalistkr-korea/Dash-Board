@@ -18,6 +18,13 @@ const groups = {
   customers: ['고객사', 'Customers', 'Khách hàng'],
   warehouses: ['창고', 'Warehouses', 'Kho'],
 };
+const businessLabels = {
+  창고: ['CL 창고', 'CL Warehousing', 'CL Kho bãi'],
+  운송: ['CL 운송', 'CL Transport', 'CL Vận tải'],
+  'CL 기타': ['CL 기타', 'CL Other', 'CL Khác'],
+  FF: ['FF', 'FF', 'FF'],
+  기타: ['기타', 'Other', 'Khác'],
+};
 const counts = Object.fromEntries(OPS_YEARS.map(year => [year, opsActualCount(year)]));
 const numberFormat = (value, digits) => value.toLocaleString('ko-KR', { maximumFractionDigits: digits });
 function money(value, currency, signed = false) {
@@ -53,7 +60,8 @@ export default function OperatingProfitWatch({ cmp, region, clff, subtype }) {
     if (!cmp || biz == null) return null;
     return Object.fromEntries(Object.keys(groups).map(kind => {
       const entities = opsList(kind, region, clff).map(e => ({
-        name: e.name, region: e.region, segments: segKeys(e, clff, biz).map(key => e.data[key]).filter(Boolean),
+        name: e.name, region: e.region, segments: segKeys(e, clff, biz)
+          .filter(key => e.data[key]).map(business => ({ ...e.data[business], business })),
       }));
       return [kind, operatingProfitWatch(entities, cmp, counts)];
     }));
@@ -67,6 +75,10 @@ export default function OperatingProfitWatch({ cmp, region, clff, subtype }) {
   const before = cmp ? period(cmp.by, cmp.bm) : '';
   const after = cmp ? period(cmp.cy, cmp.cm) : '';
   const scope = [t(region), clff !== '전체' ? t(clff) : null, subtype !== '전체' ? t(subtype) : null].filter(Boolean).join(' · ');
+  const businesses = row => Object.entries(businessLabels).filter(([key]) => row.businesses.includes(key))
+    .map(([, label]) => L(...label));
+  const detailScope = selected?.kind === 'customers' ? businesses(selected.row)
+    : [clff !== '전체' ? t(clff) : null, subtype !== '전체' ? t(subtype) : null];
   const unit = smallMoneyLabel();
   const close = () => { setSelected(null); triggerRef.current?.focus(); };
 
@@ -104,6 +116,7 @@ export default function OperatingProfitWatch({ cmp, region, clff, subtype }) {
                           <span aria-hidden="true" className="text-[10px] text-slate-400">{i + 1}</span>
                           <span className="line-clamp-2 break-words">{row.name}</span>
                         </button>
+                        {kind === 'customers' && <p className="ml-3 mt-0.5 text-[10px] text-slate-600">{businesses(row).join(' · ')}</p>}
                         {row.before.opProfit >= 0 && row.after.opProfit < 0 &&
                           <span className="ml-3 text-[10px] font-medium text-red-600">{L('적자 전환', 'Turned loss', 'Chuyển lỗ')}</span>}
                       </th>
@@ -142,8 +155,7 @@ export default function OperatingProfitWatch({ cmp, region, clff, subtype }) {
             <button type="button" onClick={close} className="rounded-lg border bg-white px-2 py-1 text-xs text-slate-600">{L('상세 닫기', 'Close details', 'Đóng chi tiết')}</button>
           </div>
         </div>
-        <p className="text-[11px] text-slate-500">{[t(selected.row.region), clff !== '전체' ? t(clff) : null,
-          subtype !== '전체' ? t(subtype) : null, unit].filter(Boolean).join(' · ')}</p>
+        <p className="text-[11px] text-slate-500">{[t(selected.row.region), ...detailScope, unit].filter(Boolean).join(' · ')}</p>
         <div className="overflow-x-auto scrollbar-thin">
           <table aria-label={L('선택 대상 손익 비교', 'Selected entity P&L comparison', 'So sánh kết quả đơn vị đã chọn')} className="w-full min-w-[360px] text-xs">
             <thead><tr className="border-b border-blue-100 text-slate-500">

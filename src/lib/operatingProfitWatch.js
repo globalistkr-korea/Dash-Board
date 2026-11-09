@@ -22,6 +22,7 @@ function readPeriod(segments, year, months, actualCount) {
   }));
   return {
     ...values, present,
+    businesses: [...new Set(byMonth.flatMap(active => active.map(s => s.business)).filter(Boolean))],
     costOfSales: difference(values.revenue, values.grossProfit),
     sga: difference(values.grossProfit, values.opProfit),
     opMargin: values.revenue > 0 && values.opProfit != null ? values.opProfit / values.revenue * 100 : null,
@@ -39,7 +40,10 @@ export function operatingProfitWatch(entities, cmp, actualCounts) {
     if (!before.present && !after.present) continue;
     const delta = Object.fromEntries(WATCH_METRICS.map(field => [field, difference(after[field], before[field])]));
     if (delta.opProfit == null) excluded++;
-    else if (delta.opProfit < -1e-8) candidates.push({ name, region, before, after, delta });
+    else if (delta.opProfit < -1e-8) candidates.push({
+      name, region, before, after, delta,
+      businesses: [...new Set([...before.businesses, ...after.businesses])],
+    });
   }
   candidates.sort((a, b) => a.delta.opProfit - b.delta.opProfit || a.name.localeCompare(b.name, 'ko'));
   return { rows: candidates.slice(0, 5), excluded };
