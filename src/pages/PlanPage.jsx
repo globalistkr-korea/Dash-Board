@@ -15,6 +15,7 @@ import { formatSmallMoney, formatLargeMoney, smallMoneyLabel, largeMoneyLabel } 
 import { useLang } from '../context/LangContext';
 import quality from '../data/pnl_import_quality.json';
 import { MONTHLY_VIEW_KEY, normalizeMonthlyView, monthlyPeriod, monthlyMetricRows } from '../lib/monthlyPeriod';
+import OperatingProfitWatch from '../components/OperatingProfitWatch';
 
 // 1,400줄 보고 브리핑(+Firebase 연동)은 지연 로딩 — 첫 화면 번들에서 분리
 const ReportBriefing = lazy(() => import('../components/ReportBriefing'));
@@ -500,6 +501,9 @@ function MonthlyView({ clff, region, subtype, onHistoricalYear, year: CURRENT_YE
         </div>
       </Card>
       )}
+
+      <OperatingProfitWatch key={JSON.stringify([period.comparison, region, clff, subtype])}
+        cmp={period.comparison} region={region} clff={clff} subtype={subtype} />
 
       {/* 선택 기준 변동 원인 분석 */}
       {period.comparison && <VarianceCard
