@@ -58,6 +58,7 @@ export default function PlanPage() {
   const [clff, setClff] = useState('전체');
   const [region, setRegion] = useState(Number(year) <= 2024 ? '전체' : '북부');
   const [subtype, setSubtype] = useState('전체');
+  const latestMonth = actualCount(CURRENT_YEAR);
 
   const subOpts = subtypeList(clff);
   const setClffReset = (c) => { setClff(c); setSubtype('전체'); };
@@ -69,7 +70,7 @@ export default function PlanPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-slate-800">{localizeText('경영실적', 'P&L Actual', lang)} <span className="text-sm font-normal text-slate-400">{YEARS.join(' · ')}</span></h1>
-        <span className="text-xs text-slate-400">{translateDisplay(`${CURRENT_YEAR}년 ${actualCount(CURRENT_YEAR)}월까지 입력 실적 · 이후 미입력`)}</span>
+        <span className="text-xs text-slate-400">{translateDisplay(`${CURRENT_YEAR}년 ${latestMonth}월까지 입력 실적 · 이후 미입력`)}</span>
       </div>
 
       {/* 연간 / 월간 모드 */}
@@ -117,7 +118,11 @@ export default function PlanPage() {
 
       <div className="text-[11px] text-slate-400">{translateDisplay("현재 보기: ")}<b className="text-slate-600">{scopeLabel}</b>{translateDisplay(" · 매출·매출원가 ")}{largeMoneyLabel()}{translateDisplay(" / 이익 ")}{smallMoneyLabel()}{translateDisplay(" · 매출원가=매출−매출이익(직접+간접원가)")}</div>
       <details className="rounded-xl border border-amber-100 bg-amber-50/50 p-3 text-xs text-slate-600">
-        <summary className="cursor-pointer font-semibold">{translateDisplay("원본·연도별 품질 확인 · 2026년 8월까지 · 과거 지역 구분 확인 필요")}</summary>
+        <summary className="cursor-pointer font-semibold">{localizeText(
+          `원본·연도별 품질 확인 · ${CURRENT_YEAR}년 ${latestMonth}월까지 · 과거 지역 구분 확인 필요`,
+          `Source and yearly data quality · through ${latestMonth}/${CURRENT_YEAR} · check historical region coverage`,
+          lang,
+        )}</summary>
         <div className="overflow-x-auto mt-2"><table className="w-full text-left">
           <thead><tr className="border-b border-amber-100"><th className="p-2">{translateDisplay("연도")}</th><th className="p-2">{translateDisplay("입력 월")}</th><th className="p-2">{translateDisplay("지역 구분")}</th><th className="p-2">{translateDisplay("이익 산식 불일치 행")}</th></tr></thead>
           <tbody>{YEARS.map((y) => <tr key={y} className="border-b border-amber-100/50"><td className="p-2">{y}</td><td className="p-2">1~{actualCount(y)}{translateDisplay("월")}</td><td className="p-2">{Number(y) <= 2024 ? '원본 누락 · 전체 조회' : '북부·남부·미지정'}</td><td className="p-2">{translateDisplay("직접이익 ")}{quality.identityMismatchRows[`${y}:directProfit`] || 0}{translateDisplay(" / 매출이익 ")}{quality.identityMismatchRows[`${y}:grossProfit`] || 0}</td></tr>)}</tbody>

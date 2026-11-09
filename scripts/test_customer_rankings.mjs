@@ -88,9 +88,13 @@ test('North source top 10 and the full revenue denominator reconcile to the orig
     }
     return {e:{name,...e},v};
   });
-  const r = customerRankings(rows,options);
-  const sourceTotals = customers.map(([name,e])=>({name,value:Object.values(e.data).reduce((n,d)=>n+(d.revenue?.['2026']||[]).slice(0,8).reduce((s,v)=>s+(v||0),0),0)})).filter(r=>r.value!==0).sort((a,b)=>b.value-a.value);
+  const actualCount = raw.actualMonths['2026'];
+  const r = customerRankings(rows,{...options,actualCount});
+  const northRevenue = e=>Object.values(e.data).reduce((n,d)=>n+(d.revenue?.['2026']||[]).slice(0,actualCount).reduce((s,v)=>s+(v||0),0),0);
+  const sourceTotals = customers.map(([name,e])=>({name,value:northRevenue(e)})).filter(r=>r.value!==0).sort((a,b)=>b.value-a.value);
+  const originalTotal = Object.values(raw.customers).filter(e=>e.region==='북부').reduce((n,e)=>n+northRevenue(e),0);
   assert.deepEqual(r.revenue.map(r=>r.name),sourceTotals.slice(0,10).map(r=>r.name));
-  assert.ok(Math.abs(r.revenueTotal-sourceTotals.reduce((n,r)=>n+r.value,0))<1e-6);
-  assert.equal(r.revenue.filter(r=>r.name==='SPIN MASTER').length,1);
+  assert.ok(Math.abs(r.revenueTotal-originalTotal)<1e-6);
+  assert.equal(r.endMonth,actualCount);
+  assert.equal(customers.filter(([name])=>/^SPIN MASTER(?: \(북부\))?$/.test(name)).length,1);
 });

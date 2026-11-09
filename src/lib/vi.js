@@ -24,6 +24,7 @@ export const VI = {
 };
 
 export const VI_TEMPLATES = [
+  ['Source and yearly data quality · through {0}/{1} · check historical region coverage','Nguồn và chất lượng theo năm · đến tháng {0}/{1} · cần kiểm tra khu vực các năm trước'],
   ['{0} Jan-{1}M avg (excluding current)','Bình quân tháng 1–{1}/{0} (không gồm tháng đang xét)'],
   ['{0} same-period avg','Bình quân cùng kỳ năm {0}'],
   ['※ Amounts are ops data in {0}. Cost ratio = cost ÷ revenue.','※ Số tiền vận hành tính bằng {0}. Tỷ lệ chi phí = chi phí ÷ doanh thu.'],
@@ -55,7 +56,6 @@ export const KO_VI = {
   '급증·0원 전환에는 창고·고객 명칭 변경이나 비용 이관도 포함될 수 있습니다. 실제 누락 여부는 원본 확인이 필요합니다.':'Tăng mạnh hoặc về 0 cũng có thể do đổi tên kho/khách hàng hay chuyển chi phí. Cần kiểm tra dữ liệu gốc để xác nhận thiếu dữ liệu.',
   '· 2023·2024년 지역·세부 사업 미지정 · 참고용, 원본과 교차확인 권장':'· Năm 2023–2024 chưa phân loại khu vực/mảng chi tiết · Tham khảo, cần đối chiếu bản gốc',
   '⚠️ 원가 급변 점검':'⚠️ Kiểm tra biến động chi phí','전월비 임계':'Ngưỡng so với tháng trước','이상 변동 없음.':'trở lên: không có biến động.','변동액':'Chênh lệch','이상 + 전월비 ±':'trở lên + biến động tháng ±','% 이상. 클릭 → 해당':'% trở lên. Bấm →','상세.':'chi tiết.','원가 데이터가 없습니다.':'Không có dữ liệu chi phí.','큰 항목 순 · 셀 색칠 = 전월비 ±':'Sắp theo số tiền · ô màu = biến động tháng ±','% 이상이며 변동액':'% trở lên và chênh lệch','초과 → 운영팀 점검 대상':'trở lên → cần đội vận hành kiểm tra',
-  '원본·연도별 품질 확인 · 2026년 8월까지 · 과거 지역 구분 확인 필요':'Nguồn/chất lượng theo năm · đến tháng 8/2026 · cần kiểm tra khu vực các năm trước',
   '불일치 행도 원본 이익값을 유지했습니다. 조정·누락 등 실제 사유는 확인 필요합니다. 창고·고객 명칭 변경은 임의 병합하지 않아 급감·신규 알림으로 나타날 수 있습니다. 계획 데이터는 이번 원본에 없어 목표 달성률을 제공하지 않습니다.':'Giữ nguyên lợi nhuận gốc ở các dòng không khớp. Cần xác minh điều chỉnh/thiếu dữ liệu. Không tự gộp tên kho/khách hàng thay đổi nên có thể phát sinh cảnh báo giảm mạnh/mới. Nguồn này không có kế hoạch nên không hiển thị tỷ lệ hoàn thành.',
   '· 시트 실시간 동기화가 아닌 가져온 데이터 기준':'· Dựa trên dữ liệu đã nhập, chưa đồng bộ Sheet trực tiếp',
   '· Direct Profit=직접이익 / Gross Profit=매출이익 · 참고용, 원본과 교차확인 권장':'· Direct Profit = lợi nhuận trực tiếp / Gross Profit = lợi nhuận gộp · Cần đối chiếu nguồn gốc',

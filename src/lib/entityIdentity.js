@@ -48,7 +48,7 @@ function canonicalEntities(source, rules) {
       for (const [segment, data] of Object.entries(donor.data)) combineSegment(target.data[segment] ||= {}, data);
       target.segs = Object.keys(target.data);
       target.clff = [...new Set([...target.clff, ...donor.clff])];
-      target.aliasNames = [...new Set([...(target.aliasNames || []), name])];
+      target.aliasNames = [...new Set([...(target.aliasNames || []), name, ...(rule.lookupNames || [])])];
       target.identityReason = rule.reason;
       delete output[name];
     }
@@ -56,8 +56,13 @@ function canonicalEntities(source, rules) {
   return output;
 }
 export const canonicalWarehouses = source => canonicalEntities(source, CONFIRMED_WAREHOUSE_ALIASES);
-export const canonicalCustomers = source => canonicalEntities(source, CONFIRMED_CUSTOMER_ALIASES
-  .filter(rule => source[rule.canonical] && safeAlias(source[rule.canonical], rule)));
+export const canonicalCustomers = source => canonicalEntities(source, CONFIRMED_CUSTOMER_ALIASES.flatMap(rule => {
+  // The importer adds a region suffix when a customer starts appearing in multiple regions.
+  const canonical = Object.hasOwn(source, rule.canonical) ? rule.canonical : `${rule.canonical} (${rule.region})`;
+  return source[canonical] && safeAlias(source[canonical], rule)
+    ? [{ ...rule, canonical, lookupNames: canonical === rule.canonical ? [] : [rule.canonical] }]
+    : [];
+}));
 export function inputState(v, year, months, item = null) {
   if (!v.coverage) return 'unknown';
   if (!months.some(i => v.coverage[year]?.[i])) return 'noRows';

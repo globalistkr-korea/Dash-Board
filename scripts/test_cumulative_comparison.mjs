@@ -95,17 +95,19 @@ test('An uncollected prior month and non-finite source values cannot produce a m
   assert.equal(r.current.recordedCount, 7);
   assert.equal(r.delta, null);
 });
-test('Confirmed SPIN MASTER transport compares the actual 2025 and 2026 January–August sources', () => {
+test('Confirmed north SPIN MASTER transport compares matching actual months in both years', () => {
   const raw = JSON.parse(readFileSync(new URL('../src/data/ops.json', import.meta.url), 'utf8'));
-  const v = canonicalCustomers(raw.customers)['SPIN MASTER'].data['운송'];
-  const r = compare(v);
+  const name = Object.hasOwn(raw.customers, 'SPIN MASTER (북부)') ? 'SPIN MASTER (북부)' : 'SPIN MASTER';
+  const count = raw.actualMonths['2026'];
+  const v = canonicalCustomers(raw.customers)[name].data['운송'];
+  const r = compare(v, { actualCount: count });
   for (const field of CUMULATIVE_FIELDS) {
-    const prior = raw.customers['SPIN MASTER TOYS FAR EAST LIMITED (북부)'].data['운송'][field]['2025'].slice(0, 8).reduce((sum, n) => sum + n, 0);
-    const current = raw.customers['SPIN MASTER'].data['운송'][field]['2026'].slice(0, 8).reduce((sum, n) => sum + n, 0);
+    const prior = raw.customers['SPIN MASTER TOYS FAR EAST LIMITED (북부)'].data['운송'][field]['2025'].slice(0, count).reduce((sum, n) => sum + n, 0);
+    const current = raw.customers[name].data['운송'][field]['2026'].slice(0, count).reduce((sum, n) => sum + n, 0);
     assert.equal(row(r, field).previous.value, prior);
     assert.equal(row(r, field).current.value, current);
     assert.equal(row(r, field).delta, current - prior);
   }
-  assert.equal(row(r).previous.recordedCount, 8);
-  assert.equal(row(r).current.recordedCount, 8);
+  assert.equal(row(r).previous.recordedCount, count);
+  assert.equal(row(r).current.recordedCount, count);
 });
