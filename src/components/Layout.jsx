@@ -85,11 +85,11 @@ export default function Layout({ currentPage, onNavigate, children }) {
           </div>
         </div>
       </header>
-      {currency === 'krw' && <div className="bg-blue-50 text-blue-700 text-center px-3 py-1 text-[11px]">{translateDisplay("원화 환산 · 참고 환율 1 VND = 0.056원(고정, 실시간 아님) · 원본·분석 기준은 VND")}</div>}
+      {currency === 'krw' && currentPage !== 'contract' && <div className="bg-blue-50 text-blue-700 text-center px-3 py-1 text-[11px]">{translateDisplay("원화 환산 · 참고 환율 1 VND = 0.056원(고정, 실시간 아님) · 원본·분석 기준은 VND")}</div>}
 
       {/* 메인 */}
       <main className="flex-1 max-w-screen-xl mx-auto w-full px-3 sm:px-4 py-4 pb-24 md:pb-6">
-        <SourceSyncStatus />
+        {currentPage !== 'contract' && <SourceSyncStatus />}
         {children}
       </main>
 

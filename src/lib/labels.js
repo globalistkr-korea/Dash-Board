@@ -78,6 +78,26 @@ export const en = (k) => EN[k] || '';
 
 // 계약 데이터 영문 필드 → 한국어 (시트 원본이 영문)
 export const CONTRACT_KO = {
+  'Entity': '법인',
+  'Customer Name': '고객사명',
+  'Contract Start Year': '최초 계약 연도',
+  'Contract start year': '최초 계약 연도',
+  'Current contract start': '현재 계약 시작일',
+  'Current Contract start': '현재 계약 시작일',
+  'Auto Renew': '자동갱신',
+  'Auto renew ?': '자동갱신',
+  'Area (m2)': '면적 (㎡)',
+  'Capacity (pallet)': '수용량 (팔레트)',
+  'TM Destination': '운송 목적지',
+  'TM Fee': '운송 요금',
+  'Bill cut off date': '청구 마감일',
+  'Maintanance': '유지보수 조항',
+  'Environmental Issue': '환경 조항',
+  'Force Majeure Event': '불가항력 조항',
+  'Confidential Informations': '비밀유지 조항',
+  'Applicable Law & Dispute Settlement': '준거법·분쟁 해결',
+  'PIC': '담당자',
+  'Unlabelled column': '제목 없는 원본 열',
   'No.': '번호',
   // 창고 마스터
   'Warehouse ID': '창고 ID',

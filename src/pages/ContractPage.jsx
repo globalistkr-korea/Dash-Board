@@ -1,116 +1,127 @@
-import { localizeText, translateDisplay } from "../lib/i18n";
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Search } from 'lucide-react';
-import { warehouseMaster, clientContracts, vendors } from '../lib/aggregate';
+import { Fragment, useState } from 'react';
+import { ChevronDown, ChevronRight, ExternalLink, Search } from 'lucide-react';
+import { contractSource, contractTabs } from '../lib/contracts';
 import { useLang } from '../context/LangContext';
 
-// 탭별: 데이터, 제목 필드, 부제(계약기간) 필드 후보
-const TABS = [
-  {
-    id: 'warehouse', label: '창고',
-    data: warehouseMaster,
-    title: (r) => r['Warehouse Name'] || r['Warehouse ID'] || '-',
-    badges: (r) => [r['Location'], r['Ownership Type']].filter(Boolean),
-    period: (r) => [r['Contract Period'], r['Contract end']].filter(Boolean).join(' ~ '),
-  },
-  {
-    id: 'client', label: '고객사',
-    data: clientContracts,
-    title: (r) => r['Client'] || '-',
-    badges: (r) => [r['WH'], r['Contract type']].filter(Boolean),
-    period: (r) => [r['Contract start'], r['Contract end']].filter(Boolean).join(' ~ '),
-  },
-  {
-    id: 'vendor', label: '벤더',
-    data: vendors,
-    title: (r) => r['Vendor Name'] || '-',
-    badges: (r) => [r['Operation Scppe'], r['WH Location']].filter(Boolean),
-    period: (r) => [r['Contract start (DD/MM/YY)'] || r['Contract start'], r['Contract end']].filter(Boolean).join(' ~ '),
-  },
-];
-
-const HIDE_EMPTY = (v) => v != null && String(v).trim() !== '' && String(v).trim() !== '-';
+const COPY = {
+  title: ['계약 정보', 'Contracts', 'Hợp đồng'],
+  WH: ['창고 임대', 'Warehouse leases', 'Thuê kho'],
+  CUSTOMER: ['고객사', 'Customers', 'Khách hàng'],
+  'WH Vendor': ['창고 운영 벤더', 'Warehouse vendors', 'Nhà cung cấp kho'],
+  source: ['원본 시트', 'Source sheet', 'Bảng tính nguồn'],
+  checked: ['확인', 'Checked', 'Đã kiểm tra'],
+  refresh: ['요청 시 갱신', 'Updated on request', 'Cập nhật khi yêu cầu'],
+  search: ['이름·창고·계약 내용 검색', 'Search name, warehouse or terms', 'Tìm tên, kho hoặc điều khoản'],
+  all: ['전체', 'All', 'Tất cả'],
+  review: ['원본 확인 필요', 'Source review needed', 'Cần kiểm tra nguồn'],
+  name: ['계약 대상', 'Contract party', 'Đối tác hợp đồng'],
+  location: ['창고·위치', 'Warehouse / location', 'Kho / vị trí'],
+  fee: ['월 금액 (VND)', 'Monthly amount (VND)', 'Số tiền tháng (VND)'],
+  period: ['현재 계약기간', 'Current contract period', 'Thời hạn hiện tại'],
+  renewal: ['자동갱신', 'Auto renewal', 'Tự gia hạn'],
+  termination: ['해지 사전통보', 'Termination notice', 'Báo trước chấm dứt'],
+  contact: ['담당자', 'Contact', 'Người phụ trách'],
+  empty: ['미기입', 'Not entered', 'Chưa nhập'],
+  noResults: ['검색 결과가 없습니다.', 'No results.', 'Không có kết quả.'],
+  detail: ['계약 상세', 'Contract details', 'Chi tiết hợp đồng'],
+  dates: ['####·수식 오류·날짜·열 위치는 원본 확인이 필요합니다.', 'Hash placeholders, formula errors, dates and column placement need source review.', 'Cần kiểm tra các ký hiệu ####, lỗi công thức, ngày và vị trí cột trong nguồn.'],
+  shifted: ['고객사 R~AG열은 제목·내용 불일치 또는 제목 누락이 있어 원본 열 문자와 확인 표시를 붙였습니다. 해지 통보는 상세 원본을 확인해 주세요.', 'Customer columns R–AG have mismatched or missing headers. Column letters and review flags are shown. Check termination notice in the source details.', 'Các cột R–AG có tiêu đề không khớp hoặc thiếu. Hiển thị ký tự cột và dấu cần kiểm tra. Xem báo trước chấm dứt trong chi tiết nguồn.'],
+  currency: ['계약 금액·단가는 원본 VND 기준', 'Contract amounts and rates use source VND', 'Số tiền và đơn giá theo VND nguồn'],
+};
 
 export default function ContractPage() {
-  const { t, tf, lang } = useLang();
-  const [tab, setTab] = useState('warehouse');
-  const [q, setQ] = useState('');
+  const { lang, tf } = useLang();
+  const [tab, setTab] = useState('WH');
+  const [query, setQuery] = useState('');
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [open, setOpen] = useState(null);
-
-  const cfg = TABS.find((t) => t.id === tab);
-  const ql = q.trim().toLowerCase();
-  const rows = cfg.data.filter((r) =>
-    !ql || Object.values(r).some((v) => String(v).toLowerCase().includes(ql))
+  const languageIndex = { ko: 0, en: 1, vi: 2 }[lang] ?? 0;
+  const text = key => COPY[key][languageIndex];
+  const cfg = contractTabs.find(item => item.id === tab);
+  const reviewCount = cfg.records.filter(record => record.needsReview).length;
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const rows = cfg.records.filter(record =>
+    (!reviewOnly || record.needsReview) &&
+    (!normalizedQuery || Object.values(record.values).some(value => value.toLocaleLowerCase().includes(normalizedQuery)))
   );
+  const display = value => value?.trim() || text('empty');
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-bold text-slate-800">{t('계약 정보')}</h1>
-      <p className="text-xs text-amber-700">{translateDisplay("계약자료는 이전 원본을 유지합니다. 새 Customer PNL 시트에는 계약 정보가 포함되어 있지 않습니다.")}</p>
-
-      <div className="flex gap-1.5">
-        {TABS.map((tb) => (
-          <button
-            key={tb.id}
-            onClick={() => { setTab(tb.id); setOpen(null); }}
-            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors
-              ${tab === tb.id ? 'bg-blue-700 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
-          >
-            {t(tb.label)} <span className="opacity-60">{tb.data.length}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-lg font-bold text-slate-800">{text('title')}</h1>
+        <a href={contractSource.url} className="inline-flex items-center gap-1 text-sm text-blue-700 underline">
+          {text('source')} <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+      <p className="text-xs text-slate-500">{contractSource.title} · {text('checked')} {contractSource.checkedAt} · {text('refresh')}</p>
+      <div role="group" aria-label={text('title')} className="flex flex-wrap gap-2">
+        {contractTabs.map(item => (
+          <button key={item.id} onClick={() => { setTab(item.id); setOpen(null); }} aria-pressed={tab === item.id}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium ${tab === item.id ? 'bg-blue-700 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>
+            {text(item.id)} <span className="opacity-70">{item.records.length}</span>
           </button>
         ))}
       </div>
-
-      <div className="relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={localizeText('이름·창고·내용 검색', 'Search name / warehouse / content', lang)}
-          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
+      <div className="flex flex-wrap gap-2">
+        <div className="relative min-w-0 flex-1 basis-64">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input value={query} onChange={event => { setQuery(event.target.value); setOpen(null); }} aria-label={text('search')} placeholder={text('search')}
+            className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+        </div>
+        {reviewCount > 0 && <button onClick={() => { setReviewOnly(!reviewOnly); setOpen(null); }} aria-pressed={reviewOnly}
+          className={`rounded-xl border px-3 py-2 text-xs ${reviewOnly ? 'border-amber-400 bg-amber-100 text-amber-900' : 'border-slate-200 bg-white text-slate-600'}`}>
+          {text('review')} {reviewCount}
+        </button>}
+        {(query || reviewOnly) && <button className="px-2 text-xs text-blue-700 underline" onClick={() => { setQuery(''); setReviewOnly(false); setOpen(null); }}>{text('all')}</button>}
       </div>
-
-      <div className="space-y-2">
-        {rows.length === 0 && (
-          <div className="text-center text-slate-400 text-sm py-8">{localizeText('검색 결과가 없습니다.', 'No results.', lang)}</div>
-        )}
-        {rows.map((r, i) => {
-          const id = `${tab}-${i}`;
-          const period = cfg.period(r);
-          const isOpen = open === id;
-          const entries = Object.entries(r).filter(([, v]) => HIDE_EMPTY(v));
-          return (
-            <div key={id} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-              <button
-                onClick={() => setOpen(isOpen ? null : id)}
-                className="w-full flex items-center gap-2 px-3.5 py-3 text-left hover:bg-slate-50 transition-colors"
-              >
-                {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-slate-800 text-sm truncate">{cfg.title(r)}</div>
-                  <div className="flex flex-wrap gap-1 mt-0.5">
-                    {cfg.badges(r).map((b, k) => (
-                      <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 truncate max-w-[160px]">{b}</span>
-                    ))}
-                  </div>
-                </div>
-                {period && <div className="text-[11px] text-slate-400 shrink-0 text-right max-w-[120px]">{period}</div>}
-              </button>
-
-              {isOpen && (
-                <div className="border-t border-slate-100 px-3.5 py-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-                  {entries.map(([k, v]) => (
-                    <div key={k} className="flex justify-between gap-3 py-1 border-b border-slate-50 text-xs">
-                      <span className="text-slate-400 shrink-0">{tf(k)}</span>
-                      <span className="text-slate-700 text-right break-words">{String(v)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {reviewCount > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+        {text('dates')}{tab === 'CUSTOMER' && <p className="mt-1">{text('shifted')}</p>}
+      </div>}
+      <div className="flex justify-between gap-2 text-xs text-slate-500"><span>{rows.length} / {cfg.records.length}</span><span>{text('currency')}</span></div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full min-w-[1050px] text-left text-xs">
+          <thead className="bg-slate-50 text-slate-500">
+            <tr>{['name', 'location', 'fee', 'period', 'renewal', 'termination', 'contact'].map(key => <th key={key} className="px-3 py-3 font-semibold">{text(key)}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={7} className="py-10 text-center text-slate-500">{text('noResults')}</td></tr>}
+            {rows.map(record => {
+              const isOpen = open === record.id;
+              const Icon = isOpen ? ChevronDown : ChevronRight;
+              return (
+                <Fragment key={record.id}>
+                  <tr className="border-t border-slate-100 align-top hover:bg-slate-50">
+                    <td className="max-w-[240px] px-3 py-3">
+                      <button onClick={() => setOpen(isOpen ? null : record.id)} aria-expanded={isOpen} aria-controls={`detail-${record.id}`} className="flex items-start gap-1.5 text-left font-semibold text-blue-800">
+                        <Icon className="mt-0.5 h-4 w-4 shrink-0" /><span className="break-words">{record.name}</span>
+                      </button>
+                      {record.entity && <div className="ml-5 mt-1 text-slate-500">{record.entity}</div>}
+                      {record.scope && <div className="ml-5 mt-1 whitespace-pre-line text-slate-500">{record.scope}</div>}
+                      {record.notes && <div className="ml-5 mt-1 whitespace-pre-line text-amber-800">{record.notes}</div>}
+                      {record.needsReview && <div className="ml-5 mt-1 text-amber-700">{text('review')}</div>}
+                    </td>
+                    <td className="max-w-[180px] whitespace-pre-line break-words px-3 py-3">{display(record.location)}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right font-medium tabular-nums">{display(record.fee)}</td>
+                    <td className="min-w-[160px] max-w-[220px] whitespace-pre-line px-3 py-3"><div>{display(record.start)}</div><div className="mt-1 text-slate-500">~ {display(record.end)}</div></td>
+                    <td className="max-w-[150px] whitespace-pre-line px-3 py-3">{display(record.renewal)}</td>
+                    <td className={`max-w-[160px] whitespace-pre-line px-3 py-3 ${record.terminationUncertain ? 'text-amber-800' : ''}`}>{record.terminationUncertain ? text('review') : display(record.termination)}</td>
+                    <td className="whitespace-pre-line px-3 py-3">{display(record.contact)}</td>
+                  </tr>
+                  {isOpen && <tr id={`detail-${record.id}`}><td colSpan={7} className="border-t border-blue-100 bg-blue-50/30 px-4 py-4">
+                    <div className="mb-3 flex items-center justify-between gap-2"><h2 className="font-semibold text-slate-800">{record.name} · {text('detail')}</h2><a href={record.sourceUrl} className="text-blue-700 underline">{record.sheet} · {record.rows[0].row}–{record.rows.at(-1).row} ↗</a></div>
+                    <dl className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
+                      {record.fields.map(field => <div key={field.column} className="min-w-0 border-b border-slate-200 py-2">
+                        <dt className={`mb-1 font-semibold ${field.uncertain ? 'text-amber-800' : 'text-slate-500'}`}>{field.column} · {tf(field.header)}{field.uncertain ? ` · ${text('review')}` : ''}</dt>
+                        <dd className="space-y-1 text-slate-800">{field.values.map(cell => <div key={cell.row} className="whitespace-pre-wrap break-words"><span className="mr-2 text-[10px] text-slate-400">{field.column}{cell.row}</span>{cell.value}</div>)}</dd>
+                      </div>)}
+                    </dl>
+                  </td></tr>}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

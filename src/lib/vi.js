@@ -69,6 +69,15 @@ export const KO_VI = {
   '백만원':'triệu KRW','억원':'100 triệu KRW','백만동':'triệu VND','십억동':'tỷ VND','원본 누락 · 전체 조회':'Thiếu trong nguồn · xem tất cả','북부·남부·미지정':'Miền Bắc · Miền Nam · chưa phân loại','입력 실적':'Thực tế đã nhập','실적':'Thực tế','어디 창고:':'Kho liên quan:','어느 고객사:':'Khách hàng liên quan:','보고 메모:':'Ghi chú báo cáo:','담당자 확인 요청':'Đề nghị người phụ trách xác nhận','확인 필요':'Cần xác nhận','확인 완료':'Đã xác nhận','수치 근거:':'Căn cứ số liệu:','문의 내용:':'Nội dung hỏi:',
 };
 export const CONTRACT_VI = {
+  'Entity':'Pháp nhân', 'Customer Name':'Tên khách hàng',
+  'Contract Start Year':'Năm bắt đầu hợp đồng', 'Contract start year':'Năm bắt đầu hợp đồng',
+  'Current contract start':'Ngày bắt đầu hợp đồng hiện tại', 'Current Contract start':'Ngày bắt đầu hợp đồng hiện tại',
+  'Auto Renew':'Tự gia hạn', 'Auto renew ?':'Tự gia hạn', 'Area (m2)':'Diện tích (m²)',
+  'Capacity (pallet)':'Sức chứa (pallet)', 'TM Destination':'Điểm đến vận tải', 'TM Fee':'Phí vận tải',
+  'Bill cut off date':'Ngày chốt hóa đơn', 'Maintanance':'Điều khoản bảo trì',
+  'Environmental Issue':'Điều khoản môi trường', 'Force Majeure Event':'Điều khoản bất khả kháng',
+  'Confidential Informations':'Điều khoản bảo mật', 'Applicable Law & Dispute Settlement':'Luật áp dụng và giải quyết tranh chấp',
+  'PIC':'Người phụ trách', 'Unlabelled column':'Cột nguồn chưa có tiêu đề',
   'No.':'STT', 'Warehouse ID':'Mã kho', 'Warehouse Name':'Tên kho', 'Location':'Vị trí', 'Map Location':'Vị trí trên bản đồ',
   'Ownership Type':'Hình thức sở hữu', 'Warehouse Type':'Loại kho', 'Price (VND/m²/month)':'Đơn giá (VND/m²/tháng)',
   'Extra cost':'Chi phí bổ sung', 'Extra Costs':'Chi phí bổ sung', 'Monthly Rental Fee (VND)':'Tiền thuê hàng tháng (VND)',
