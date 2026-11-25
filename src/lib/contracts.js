@@ -1,7 +1,3 @@
-import snapshot from '../data/contracts.json';
-
-export const contractSource = snapshot.source;
-
 export function columnLetter(index) {
   let result = '';
   for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
@@ -10,7 +6,7 @@ export function columnLetter(index) {
   return result;
 }
 
-export function groupContractRows(sheet) {
+function groupContractRows(sheet, source) {
   const records = [];
   const nameIndex = sheet.name === 'WH' ? 1 : 2;
   for (const row of sheet.rows) {
@@ -49,9 +45,12 @@ export function groupContractRows(sheet) {
       notes: values.Remarks,
       scope: values['Operation Scppe'],
       needsReview: hasSourceError || fields.some(field => field.uncertain) || /\b0\d{3}\b/.test(`${start} ${end}`),
-      sourceUrl: `${snapshot.source.url}#gid=${sheet.sheetId}&range=A${record.rows[0].row}:${columnLetter(width - 1)}${record.rows.at(-1).row}`,
+      sourceUrl: `${source.url}#gid=${sheet.sheetId}&range=A${record.rows[0].row}:${columnLetter(width - 1)}${record.rows.at(-1).row}`,
     };
   });
 }
 
-export const contractTabs = snapshot.sheets.map(sheet => ({ id: sheet.name, records: groupContractRows(sheet) }));
+export function buildContractRegister(snapshot) {
+  const source = snapshot.source;
+  return { source, tabs: snapshot.sheets.map(sheet => ({ id: sheet.name, records: groupContractRows(sheet, source) })) };
+}

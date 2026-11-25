@@ -1,6 +1,10 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, ExternalLink, Search } from 'lucide-react';
-import { contractSource, contractTabs } from '../lib/contracts';
+import { getRedirectResult, signInWithRedirect } from 'firebase/auth';
+import { doc, getDocFromServer } from 'firebase/firestore';
+import { buildContractRegister } from '../lib/contracts';
+import { auth, db, googleProvider } from '../lib/firebase';
+import { useDecisionLinks } from '../context/DecisionLinkContext';
 import { useLang } from '../context/LangContext';
 
 const COPY = {
@@ -27,9 +31,68 @@ const COPY = {
   dates: ['####·수식 오류·날짜·열 위치는 원본 확인이 필요합니다.', 'Hash placeholders, formula errors, dates and column placement need source review.', 'Cần kiểm tra các ký hiệu ####, lỗi công thức, ngày và vị trí cột trong nguồn.'],
   shifted: ['고객사 R~AG열은 제목·내용 불일치 또는 제목 누락이 있어 원본 열 문자와 확인 표시를 붙였습니다. 해지 통보는 상세 원본을 확인해 주세요.', 'Customer columns R–AG have mismatched or missing headers. Column letters and review flags are shown. Check termination notice in the source details.', 'Các cột R–AG có tiêu đề không khớp hoặc thiếu. Hiển thị ký tự cột và dấu cần kiểm tra. Xem báo trước chấm dứt trong chi tiết nguồn.'],
   currency: ['계약 금액·단가는 원본 VND 기준', 'Contract amounts and rates use source VND', 'Số tiền và đơn giá theo VND nguồn'],
+  loading: ['계약 자료 확인 중…', 'Checking contract access…', 'Đang kiểm tra quyền xem hợp đồng…'],
+  signIn: ['Google로 시작', 'Continue with Google', 'Đăng nhập Google'],
+  signInHint: ['허용된 Google 계정으로 계약 자료를 볼 수 있습니다.', 'Use an authorized Google account to view contracts.', 'Dùng tài khoản Google được cấp quyền để xem hợp đồng.'],
+  signInFailed: ['Google 로그인에 실패했습니다. 다시 시도해 주세요.', 'Google sign-in failed. Try again.', 'Đăng nhập Google thất bại. Vui lòng thử lại.'],
+  denied: ['이 Google 계정은 계약 자료 열람 권한이 없습니다.', 'This Google account cannot access the contracts.', 'Tài khoản Google này không có quyền xem hợp đồng.'],
+  failed: ['계약 자료를 불러오지 못했습니다.', 'Could not load the contracts.', 'Không thể tải hợp đồng.'],
+  retry: ['다시 시도', 'Try again', 'Thử lại'],
 };
 
 export default function ContractPage() {
+  const { user } = useDecisionLinks();
+  return <ContractAccess key={user?.uid ?? 'signed-out'} user={user} />;
+}
+
+function ContractAccess({ user }) {
+  const { lang } = useLang();
+  const text = key => COPY[key][{ ko: 0, en: 1, vi: 2 }[lang] ?? 0];
+  const [register, setRegister] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const [signInError, setSignInError] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    getRedirectResult(auth).catch(() => { if (active) setSignInError(true); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    getDocFromServer(doc(db, 'contractRegisters', 'warehouse')).then(snapshot => {
+      if (active) setRegister(buildContractRegister(JSON.parse(snapshot.data()?.snapshot)));
+    }).catch(error => {
+      if (active) setLoadError(error.code === 'permission-denied' ? 'denied' : 'failed');
+    });
+    return () => { active = false; };
+  }, [user, attempt]);
+
+  async function signIn() {
+    setSigningIn(true);
+    setSignInError(false);
+    try { await signInWithRedirect(auth, googleProvider); }
+    catch { setSignInError(true); setSigningIn(false); }
+  }
+
+  if (register) return <ContractRegister register={register} />;
+  return (
+    <section className="space-y-3 rounded-xl bg-white p-6">
+      <h1 className="text-lg font-bold text-slate-800">{text('title')}</h1>
+      <p role="status" className="text-sm text-slate-600">
+        {text(loadError || (user === null ? 'signInHint' : 'loading'))}
+      </p>
+      {user === null && <button disabled={signingIn} onClick={signIn} className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50">{text('signIn')}</button>}
+      {user === null && signInError && <p role="alert" className="text-sm text-red-700">{text('signInFailed')}</p>}
+      {loadError === 'failed' && <button onClick={() => { setLoadError(''); setAttempt(value => value + 1); }} className="rounded-lg border px-3 py-2 text-sm">{text('retry')}</button>}
+    </section>
+  );
+}
+
+function ContractRegister({ register: { source: contractSource, tabs: contractTabs } }) {
   const { lang, tf } = useLang();
   const [tab, setTab] = useState('WH');
   const [query, setQuery] = useState('');
