@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ExternalLink, Search } from 'lucide-react';
 import { getRedirectResult, signInWithRedirect } from 'firebase/auth';
 import { doc, getDocFromServer } from 'firebase/firestore';
@@ -6,6 +6,7 @@ import { buildContractRegister } from '../lib/contracts';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { useDecisionLinks } from '../context/DecisionLinkContext';
 import { useLang } from '../context/LangContext';
+import { RenewalReview, WarehouseContractComparison } from '../components/ContractAnalysis';
 
 const COPY = {
   title: ['계약 정보', 'Contracts', 'Hợp đồng'],
@@ -38,6 +39,10 @@ const COPY = {
   denied: ['이 Google 계정은 계약 자료 열람 권한이 없습니다.', 'This Google account cannot access the contracts.', 'Tài khoản Google này không có quyền xem hợp đồng.'],
   failed: ['계약 자료를 불러오지 못했습니다.', 'Could not load the contracts.', 'Không thể tải hợp đồng.'],
   retry: ['다시 시도', 'Try again', 'Thử lại'],
+  register: ['계약 목록', 'Contract register', 'Danh sách hợp đồng'],
+  renewalReview: ['만료·갱신 검토', 'Expiry & renewal review', 'Rà soát hết hạn và gia hạn'],
+  warehousePnl: ['창고별 계약·손익', 'Contracts & P&L by warehouse', 'Hợp đồng và P&L theo kho'],
+  back: ['검토 화면으로 돌아가기', 'Back to review', 'Quay lại màn hình rà soát'],
 };
 
 export default function ContractPage() {
@@ -98,16 +103,37 @@ function ContractRegister({ register: { source: contractSource, tabs: contractTa
   const [query, setQuery] = useState('');
   const [reviewOnly, setReviewOnly] = useState(false);
   const [open, setOpen] = useState(null);
+  const [view, setView] = useState('register');
+  const [returnView, setReturnView] = useState(null);
+  const backButton = useRef(null);
+  const viewButtons = useRef({});
+  const focusView = useRef(false);
+  useEffect(() => {
+    if (returnView) backButton.current?.focus();
+    else if (focusView.current) {
+      focusView.current = false;
+      viewButtons.current[view]?.focus();
+    }
+  }, [view, returnView]);
   const languageIndex = { ko: 0, en: 1, vi: 2 }[lang] ?? 0;
   const text = key => COPY[key][languageIndex];
   const cfg = contractTabs.find(item => item.id === tab);
   const reviewCount = cfg.records.filter(record => record.needsReview).length;
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const rows = cfg.records.filter(record =>
+    (!returnView || record.id === open) &&
     (!reviewOnly || record.needsReview) &&
     (!normalizedQuery || Object.values(record.values).some(value => value.toLocaleLowerCase().includes(normalizedQuery)))
   );
   const display = value => value?.trim() || text('empty');
+  function openContract(record) {
+    setReturnView(view);
+    setView('register');
+    setQuery('');
+    setReviewOnly(false);
+    setTab(record.sheet);
+    setOpen(record.id);
+  }
 
   return (
     <div className="space-y-4">
@@ -118,6 +144,22 @@ function ContractRegister({ register: { source: contractSource, tabs: contractTa
         </a>
       </div>
       <p className="text-xs text-slate-500">{contractSource.title} · {text('checked')} {contractSource.checkedAt} · {text('refresh')}</p>
+      <div role="group" aria-label={text('title')} className="flex flex-wrap gap-2">
+        {['register', 'renewalReview', 'warehousePnl'].map(key => (
+          <button key={key} type="button" aria-pressed={view === key}
+            ref={element => { viewButtons.current[key] = element; }}
+            onClick={() => { setView(key); setReturnView(null); }}
+            className={`rounded-lg border px-3 py-2 text-sm font-semibold ${view === key ? 'border-blue-800 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}>
+            {text(key)}
+          </button>
+        ))}
+      </div>
+      <div hidden={view !== 'renewalReview'}><RenewalReview tabs={contractTabs} onOpen={openContract} /></div>
+      <div hidden={view !== 'warehousePnl'}><WarehouseContractComparison tabs={contractTabs} onOpen={openContract} /></div>
+      <div hidden={view !== 'register'} className="space-y-4">
+      {returnView ? (
+        <button ref={backButton} type="button" onClick={() => { focusView.current = true; setView(returnView); setReturnView(null); }} className="text-sm font-semibold text-blue-700 hover:underline">← {text('back')}</button>
+      ) : <>
       <div role="group" aria-label={text('title')} className="flex flex-wrap gap-2">
         {contractTabs.map(item => (
           <button key={item.id} onClick={() => { setTab(item.id); setOpen(null); }} aria-pressed={tab === item.id}
@@ -142,6 +184,7 @@ function ContractRegister({ register: { source: contractSource, tabs: contractTa
         {text('dates')}{tab === 'CUSTOMER' && <p className="mt-1">{text('shifted')}</p>}
       </div>}
       <div className="flex justify-between gap-2 text-xs text-slate-500"><span>{rows.length} / {cfg.records.length}</span><span>{text('currency')}</span></div>
+      </>}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[1050px] text-left text-xs">
           <thead className="bg-slate-50 text-slate-500">
@@ -156,9 +199,10 @@ function ContractRegister({ register: { source: contractSource, tabs: contractTa
                 <Fragment key={record.id}>
                   <tr className="border-t border-slate-100 align-top hover:bg-slate-50">
                     <td className="max-w-[240px] px-3 py-3">
+                      {returnView ? <span className="font-semibold text-slate-800">{record.name}</span> :
                       <button onClick={() => setOpen(isOpen ? null : record.id)} aria-expanded={isOpen} aria-controls={`detail-${record.id}`} className="flex items-start gap-1.5 text-left font-semibold text-blue-800">
                         <Icon className="mt-0.5 h-4 w-4 shrink-0" /><span className="break-words">{record.name}</span>
-                      </button>
+                      </button>}
                       {record.entity && <div className="ml-5 mt-1 text-slate-500">{record.entity}</div>}
                       {record.scope && <div className="ml-5 mt-1 whitespace-pre-line text-slate-500">{record.scope}</div>}
                       {record.notes && <div className="ml-5 mt-1 whitespace-pre-line text-amber-800">{record.notes}</div>}
@@ -185,6 +229,7 @@ function ContractRegister({ register: { source: contractSource, tabs: contractTa
             })}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );
